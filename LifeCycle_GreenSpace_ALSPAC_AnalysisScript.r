@@ -22,6 +22,10 @@ library(dagitty)
 setwd("C:\\Users\\ds16565\\OneDrive - University of Bristol\\MyFiles-Migrated\\Documents\\Projects\\Lifecycle\\Results")
 
 
+# Set the seed, so all cross-validated lasso models give same results
+set.seed(3930)
+
+
 ### Create DAG to show hypothesised causal associations between variables (haven't included green space by SEP interactions for all exposure time-points, as too messy to visualise; arrows from ethnicity and SEP to all green space variables have also been omitted)
 dag <- dagitty('dag {
                 SEP [pos = "1,1"]
@@ -51,6 +55,62 @@ dag <- dagitty('dag {
                 sex -> cardio
                 }')
 plot(dag)
+
+
+
+### Will also initialise a function to turn lasso output into a useful summary table
+lasso_table <- function(lasso_model) {
+  old_covars <- ""
+  old_deviance <- 0
+  old_varNum <- 0
+  old_lambda <- NA
+  df <- data.frame(matrix(ncol = 5, nrow = 0))
+  #df
+  
+  for (i in 1:length(lasso_model$df)) {
+    #print(i)
+    new_covars <- attributes(which(lasso_model$beta[, i] != 0))$names
+    new_deviance <- lasso_model$dev.ratio[i]
+    new_varNum <- lasso_model$df[i]
+    new_lambda <- lasso_model$lambda[i]
+    #print(new_covars); print(new_deviance); print(new_varNum)
+    
+    # See if covars added
+    if (new_varNum > old_varNum) {
+      change <- setdiff(new_covars, old_covars) # Find the new covariate(s) added
+      change <- paste(change, collapse = " ") # Combine variable together, if > 1
+      change <- paste0(change, " (+)") # Append a "(+)" sign
+      dev_diff <- round((new_deviance - old_deviance) * 100, 3) # Diff in deviance between current and previous lambda
+      new_dev <- round(new_deviance * 100, 3) # Current deviance value
+      temp <- cbind(change, new_dev, dev_diff, new_varNum, new_lambda) # Combine values together
+      df <- rbind(df, temp) # Merge with template data frame
+    }
+    
+    # See if covars removed
+    if (new_varNum < old_varNum) {
+      change <- setdiff(old_covars, new_covars) # Find the covariate(s) removed
+      change <- paste(change, collapse = " ") # Combine variable together, if > 1
+      change <- paste0(change, " (-)") # Append a "(-)" sign
+      dev_diff <- round((new_deviance - old_deviance) * 100, 3) # Diff in deviance between current and previous lambda
+      new_dev <- round(new_deviance * 100, 3) # Current deviance value
+      temp <- cbind(change, new_dev, dev_diff, new_varNum, new_lambda) # Combine values together
+      df <- rbind(df, temp) # Merge with template data frame
+    }
+    
+    # Rename the old covars, deviance and variable number
+    old_covars <- new_covars
+    old_deviance <- new_deviance
+    old_varNum <- new_varNum
+  }
+  
+  colnames(df) <- c("Variables", "DevRatio", "DevDiff", "VarNum", "Lambda")
+  #df
+  
+  # Make a var to show number of steps where variables added, and rename the covars
+  df$steps <- 1:nrow(df)
+  df$Variables[df$steps == 1] <- "covars"
+  return(df)
+}
 
 
 
@@ -459,6 +519,22 @@ x_hypos <- data_access_edu_bmi %>%
 x_hypos <- as.matrix(x_hypos)
 
 
+## Check correlation matrix of all these hypotheses (>0.9 would be a cause for concern)
+dim(x_hypos)
+cor(x_hypos[,5:20])
+cor(x_hypos[,5:20]) > 0.9
+cor(x_hypos[,5:20]) > 0.95
+
+# Biggest issues are with the accumulation variables, which are highly correlated with the critical period variables, so will drop these accumulation variables from these analysis due to collinearity and effectively measuring the same thing.
+x_hypos <- x_hypos[,!colnames(x_hypos) %in% c("accumulation", "int_accum")]
+head(x_hypos)
+
+dim(x_hypos)
+cor(x_hypos[,5:18])
+cor(x_hypos[,5:18]) > 0.9
+cor(x_hypos[,5:18]) > 0.95
+
+
 ## Run the Lasso model using GLMNET. alpha = 1 specifies L1 regularisation (lasso model), and the penalty factor option gives covariates (edu, age, sex and white) weightings of '0', so are always included in the model (default is 1)
 mod_access_edu_bmi <- glmnet(x_hypos, data_access_edu_bmi$BMI_f7, 
               alpha = 1, penalty.factor = (c(0, 0, 0, 0, rep(1, ncol(x_hypos) - 4))))
@@ -481,59 +557,8 @@ coef(mod_access_edu_bmi, s = max(mod_access_edu_bmi$lambda[mod_access_edu_bmi$df
 
 ### Visual inspection of results (although just looking at the deviance ratios there doesn't seem to be much of an effect of access to green space at all)
 
-# First, make a loop to pick out the changes in variables and the increment in deviance ratio
-old_covars <- ""
-old_deviance <- 0
-old_varNum <- 0
-old_lambda <- NA
-df <- data.frame(matrix(ncol = 4, nrow = 0))
-df
-
-for (i in 1:length(mod_access_edu_bmi$df)) {
-  #print(i)
-  new_covars <- attributes(which(mod_access_edu_bmi$beta[, i] != 0))$names
-  new_deviance <- mod_access_edu_bmi$dev.ratio[i]
-  new_varNum <- mod_access_edu_bmi$df[i]
-  new_lambda <- mod_access_edu_bmi$lambda[i]
-  #print(new_covars); print(new_deviance); print(new_varNum)
-  
-  # See if new covars different to old covars
-  if (new_varNum != old_varNum) {
-    new_addition <- setdiff(new_covars, old_covars) # Find the new covariate that's been added
-    dev_diff <- (new_deviance - old_deviance) * 100 # Diff in deviance value between current and previous lambda value
-    dev_diff <- round(dev_diff, 3)
-    temp <- cbind(new_addition, dev_diff, new_varNum, new_lambda) # Merge with template data frame
-    df <- rbind(df, temp)
-  }
-  
-  # Rename the old covars, deviance and variable number
-  old_covars <- new_covars
-  old_deviance <- new_deviance
-  old_varNum <- new_varNum
-}
-
-colnames(df) <- c("Variables", "DevDiff", "VarNum", "Lambda")
-df
-
-# If two variables added at once, combine names together (else impossible to read on plot)
-df$Variables[df$Variables == "age_f7"] <- "covars"
-df$Variables[df$Variables == "int2"] <- "int2/green_dec23"
-df$Variables[df$Variables == "int1"] <- "int1/int_accum/inc12_int/dec23_int"
-df$Variables[df$Variables == "crit1"] <- "crit1/crit2"
-df
-
-df <- df[df$Variables != "male", ]
-df <- df[df$Variables != "white", ]
-df <- df[df$Variables != "edu", ]
-df <- df[df$Variables != "green_dec23", ]
-df <- df[df$Variables != "int_accum", ]
-df <- df[df$Variables != "green_inc12_int", ]
-df <- df[df$Variables != "green_dec23_int", ]
-df <- df[df$Variables != "crit2", ]
-df
-
-# Make a var to show number of steps where variables added
-df$steps <- 1:nrow(df)
+# First, use the 'lasso-table' function defined above to pick out the changes in variables and the increment in deviance ratio
+df <- lasso_table(mod_access_edu_bmi)
 df
 
 
@@ -658,6 +683,22 @@ x_hypos2 <- data_access2_edu_bmi %>%
 x_hypos2 <- as.matrix(x_hypos2)
 
 
+## Check correlation matrix of all these hypotheses (>0.9 would be a cause for concern)
+dim(x_hypos2)
+cor(x_hypos2[,5:14])
+cor(x_hypos2[,5:14]) > 0.9
+cor(x_hypos2[,5:14]) > 0.95
+
+# Biggest issues are with the accumulation variables, which are highly correlated with the critical period variables, so will drop these accumulation variables from these analysis due to collinearity and effectively measuring the same thing.
+x_hypos2 <- x_hypos2[,!colnames(x_hypos2) %in% c("accumulation", "int_accum")]
+head(x_hypos2)
+
+dim(x_hypos2)
+cor(x_hypos2[,5:12])
+cor(x_hypos2[,5:12]) > 0.9
+cor(x_hypos2[,5:12]) > 0.95
+
+
 ## Run the Lasso model using GLMNET. alpha = 1 specifies L1 regularisation (lasso model), and the penalty factor option gives covariates (edu, age, sex and white) weightings of '0', so are always included in the model (default is 1)
 mod_access_edu_bmi2 <- glmnet(x_hypos2, data_access2_edu_bmi$BMI_f7, 
                              alpha = 1, penalty.factor = (c(0, 0, 0, 0, rep(1, ncol(x_hypos2) - 4))))
@@ -741,6 +782,11 @@ x_hypos <- data_access_edu_overweight %>%
 x_hypos <- as.matrix(x_hypos)
 
 
+## Remove the accumulation variables (as high collinearity with critical period hypotheses)
+x_hypos <- x_hypos[,!colnames(x_hypos) %in% c("accumulation", "int_accum")]
+head(x_hypos)
+
+
 ## Run the Lasso model using GLMNET. alpha = 1 specifies L1 regularisation (lasso model), and the penalty factor option gives covariates (edu, age, sex and white) weightings of '0', so are always included in the model (default is 1)
 mod_access_edu_over <- glmnet(x_hypos, data_access_edu_overweight$overweight, family = "binomial",
                              alpha = 1, penalty.factor = (c(0, 0, 0, 0, rep(1, ncol(x_hypos) - 4))))
@@ -761,53 +807,8 @@ coef(mod_access_edu_over, s = max(mod_access_edu_over$lambda[mod_access_edu_over
 
 ### Visual inspection of results (although just looking at the deviance ratios there doesn't seem to be much of an effect of access to green space at all)
 
-# First, make a loop to pick out the changes in variables and the increment in deviance ratio
-old_covars <- ""
-old_deviance <- 0
-old_varNum <- 0
-old_lambda <- NA
-df <- data.frame(matrix(ncol = 4, nrow = 0))
-df
-
-for (i in 1:length(mod_access_edu_over$df)) {
-  #print(i)
-  new_covars <- attributes(which(mod_access_edu_over$beta[, i] != 0))$names
-  new_deviance <- mod_access_edu_over$dev.ratio[i]
-  new_varNum <- mod_access_edu_over$df[i]
-  new_lambda <- mod_access_edu_over$lambda[i]
-  #print(new_covars); print(new_deviance); print(new_varNum)
-  
-  # See if new covars different to old covars
-  if (new_varNum != old_varNum) {
-    new_addition <- setdiff(new_covars, old_covars) # Find the new covariate that's been added
-    dev_diff <- (new_deviance - old_deviance) * 100 # Diff in deviance value between current and previous lambda value
-    dev_diff <- round(dev_diff, 3)
-    temp <- cbind(new_addition, dev_diff, new_varNum, new_lambda) # Merge with template data frame
-    df <- rbind(df, temp)
-  }
-  
-  # Rename the old covars, deviance and variable number
-  old_covars <- new_covars
-  old_deviance <- new_deviance
-  old_varNum <- new_varNum
-}
-
-colnames(df) <- c("Variables", "DevDiff", "VarNum", "Lambda")
-df
-
-# If two variables added at once, combine names together (else impossible to read on plot)
-df$Variables[df$Variables == "age_f7"] <- "covars"
-df$Variables[df$Variables == "crit2"] <- "crit2/green_dec12_int"
-df
-
-df <- df[df$Variables != "male", ]
-df <- df[df$Variables != "white", ]
-df <- df[df$Variables != "edu", ]
-df <- df[df$Variables != "green_dec12_int", ]
-df
-
-# Make a var to show number of steps where variables added
-df$steps <- 1:nrow(df)
+# First, use the 'lasso-table' function defined above to pick out the changes in variables and the increment in deviance ratio
+df <- lasso_table(mod_access_edu_over)
 df
 
 
@@ -886,6 +887,10 @@ x_hypos <- data_access_edu_sysBP %>%
 
 x_hypos <- as.matrix(x_hypos)
 
+## Remove the accumulation variables (as high collinearity with critical period hypotheses)
+x_hypos <- x_hypos[,!colnames(x_hypos) %in% c("accumulation", "int_accum")]
+head(x_hypos)
+
 
 ## Run the Lasso model using GLMNET. alpha = 1 specifies L1 regularisation (lasso model), and the penalty factor option gives covariates (edu, age, sex and white) weightings of '0', so are always included in the model (default is 1)
 mod_access_edu_sysBP <- glmnet(x_hypos, data_access_edu_sysBP$sysBP,
@@ -909,55 +914,8 @@ coef(mod_access_edu_sysBP, s = max(mod_access_edu_sysBP$lambda[mod_access_edu_sy
 
 ### Visual inspection of results (although just looking at the deviance ratios there doesn't seem to be much of an effect of access to green space at all)
 
-# First, make a loop to pick out the changes in variables and the increment in deviance ratio
-old_covars <- ""
-old_deviance <- 0
-old_varNum <- 0
-old_lambda <- NA
-df <- data.frame(matrix(ncol = 4, nrow = 0))
-df
-
-for (i in 1:length(mod_access_edu_sysBP$df)) {
-  #print(i)
-  new_covars <- attributes(which(mod_access_edu_sysBP$beta[, i] != 0))$names
-  new_deviance <- mod_access_edu_sysBP$dev.ratio[i]
-  new_varNum <- mod_access_edu_sysBP$df[i]
-  new_lambda <- mod_access_edu_sysBP$lambda[i]
-  #print(new_covars); print(new_deviance); print(new_varNum)
-  
-  # See if new covars different to old covars
-  if (new_varNum != old_varNum) {
-    new_addition <- setdiff(new_covars, old_covars) # Find the new covariate that's been added
-    dev_diff <- (new_deviance - old_deviance) * 100 # Diff in deviance value between current and previous lambda value
-    dev_diff <- round(dev_diff, 3)
-    temp <- cbind(new_addition, dev_diff, new_varNum, new_lambda) # Merge with template data frame
-    df <- rbind(df, temp)
-  }
-  
-  # Rename the old covars, deviance and variable number
-  old_covars <- new_covars
-  old_deviance <- new_deviance
-  old_varNum <- new_varNum
-}
-
-colnames(df) <- c("Variables", "DevDiff", "VarNum", "Lambda")
-df
-
-# If two variables added at once, combine names together (else impossible to read on plot)
-df$Variables[df$Variables == "age_f7"] <- "covars"
-df$Variables[df$Variables == "green_inc12_int"] <- "green_inc12_int/green_dec23"
-df$Variables[df$Variables == "crit1"] <- "crit1/green_inc12"
-df
-
-df <- df[df$Variables != "male", ]
-df <- df[df$Variables != "white", ]
-df <- df[df$Variables != "edu", ]
-df <- df[df$Variables != "green_dec23", ]
-df <- df[df$Variables != "green_inc12", ]
-df
-
-# Make a var to show number of steps where variables added
-df$steps <- 1:nrow(df)
+# First, use the 'lasso-table' function defined above to pick out the changes in variables and the increment in deviance ratio
+df <- lasso_table(mod_access_edu_sysBP)
 df
 
 
@@ -1011,7 +969,7 @@ mod.cv
 # Plot the log lambda by MSE to show both 'optimal' and '1SE' models (number of parameters is at top of plot)
 plot(mod.cv) 
 
-# Parameters in the 1SE and 'optimal' models - Both just contains just the 4 parameters included by default (age, sex, ethnicity and education), suggesting no association with access to green space exposure
+# Parameters in the 1SE and 'optimal' models - The 1SE just contains just the 4 parameters included by default (age, sex, ethnicity and education), suggesting no association with access to green space exposure, although the minimum mean squared error value has 16 parameters (most of the hypotheses); however, the mean squared error is practically identical, suggesting little improvement in model fit.
 coef(mod.cv, s = mod.cv$lambda.1se)
 coef(mod.cv, s = mod.cv$lambda.min)
 
@@ -1034,6 +992,10 @@ x_hypos <- data_access_edu_diaBP %>%
   select(-diaBP)
 
 x_hypos <- as.matrix(x_hypos)
+
+## Remove the accumulation variables (as high collinearity with critical period hypotheses)
+x_hypos <- x_hypos[,!colnames(x_hypos) %in% c("accumulation", "int_accum")]
+head(x_hypos)
 
 
 ## Run the Lasso model using GLMNET. alpha = 1 specifies L1 regularisation (lasso model), and the penalty factor option gives covariates (edu, age, sex and white) weightings of '0', so are always included in the model (default is 1)
@@ -1058,53 +1020,8 @@ coef(mod_access_edu_diaBP, s = max(mod_access_edu_diaBP$lambda[mod_access_edu_di
 
 ### Visual inspection of results (although just looking at the deviance ratios there doesn't seem to be much of an effect of access to green space at all)
 
-# First, make a loop to pick out the changes in variables and the increment in deviance ratio
-old_covars <- ""
-old_deviance <- 0
-old_varNum <- 0
-old_lambda <- NA
-df <- data.frame(matrix(ncol = 4, nrow = 0))
-df
-
-for (i in 1:length(mod_access_edu_diaBP$df)) {
-  #print(i)
-  new_covars <- attributes(which(mod_access_edu_diaBP$beta[, i] != 0))$names
-  new_deviance <- mod_access_edu_diaBP$dev.ratio[i]
-  new_varNum <- mod_access_edu_diaBP$df[i]
-  new_lambda <- mod_access_edu_diaBP$lambda[i]
-  #print(new_covars); print(new_deviance); print(new_varNum)
-  
-  # See if new covars different to old covars
-  if (new_varNum != old_varNum) {
-    new_addition <- setdiff(new_covars, old_covars) # Find the new covariate that's been added
-    dev_diff <- (new_deviance - old_deviance) * 100 # Diff in deviance value between current and previous lambda value
-    dev_diff <- round(dev_diff, 3)
-    temp <- cbind(new_addition, dev_diff, new_varNum, new_lambda) # Merge with template data frame
-    df <- rbind(df, temp)
-  }
-  
-  # Rename the old covars, deviance and variable number
-  old_covars <- new_covars
-  old_deviance <- new_deviance
-  old_varNum <- new_varNum
-}
-
-colnames(df) <- c("Variables", "DevDiff", "VarNum", "Lambda")
-df
-
-# If two variables added at once, combine names together (else impossible to read on plot)
-df$Variables[df$Variables == "age_f7"] <- "covars"
-df$Variables[df$Variables == "green_inc12"] <- "green_inc12/green_dec23"
-df
-
-df <- df[df$Variables != "male", ]
-df <- df[df$Variables != "white", ]
-df <- df[df$Variables != "edu", ]
-df <- df[df$Variables != "green_dec23", ]
-df
-
-# Make a var to show number of steps where variables added
-df$steps <- 1:nrow(df)
+# First, use the 'lasso-table' function defined above to pick out the changes in variables and the increment in deviance ratio
+df <- lasso_table(mod_access_edu_diaBP)
 df
 
 
@@ -1262,6 +1179,22 @@ x_hypos <- data_access_dep_bmi %>%
 x_hypos <- as.matrix(x_hypos)
 
 
+## Check correlation matrix of all these hypotheses (>0.9 would be a cause for concern)
+dim(x_hypos)
+cor(x_hypos[,5:20])
+cor(x_hypos[,5:20]) > 0.9
+cor(x_hypos[,5:20]) > 0.95
+
+# Biggest issues are with the accumulation variables, which are highly correlated with the critical period variables, so will drop these accumulation variables from these analysis due to collinearity and effectively measuring the same thing.
+x_hypos <- x_hypos[,!colnames(x_hypos) %in% c("accumulation", "int_accum")]
+head(x_hypos)
+
+dim(x_hypos)
+cor(x_hypos[,5:18])
+cor(x_hypos[,5:18]) > 0.9
+cor(x_hypos[,5:18]) > 0.95
+
+
 ## Run the Lasso model using GLMNET. alpha = 1 specifies L1 regularisation (lasso model), and the penalty factor option gives covariates (dep, age, sex and white) weightings of '0', so are always included in the model (default is 1)
 mod_access_dep_bmi <- glmnet(x_hypos, data_access_dep_bmi$BMI_f7, 
                              alpha = 1, penalty.factor = (c(0, 0, 0, 0, rep(1, ncol(x_hypos) - 4))))
@@ -1284,55 +1217,8 @@ coef(mod_access_dep_bmi, s = max(mod_access_dep_bmi$lambda[mod_access_dep_bmi$df
 
 ### Visual inspection of results (although just looking at the deviance ratios there doesn't seem to be much of an effect of access to green space at all)
 
-# First, make a loop to pick out the changes in variables and the increment in deviance ratio
-old_covars <- ""
-old_deviance <- 0
-old_varNum <- 0
-old_lambda <- NA
-df <- data.frame(matrix(ncol = 4, nrow = 0))
-df
-
-for (i in 1:length(mod_access_dep_bmi$df)) {
-  #print(i)
-  new_covars <- attributes(which(mod_access_dep_bmi$beta[, i] != 0))$names
-  new_deviance <- mod_access_dep_bmi$dev.ratio[i]
-  new_varNum <- mod_access_dep_bmi$df[i]
-  new_lambda <- mod_access_dep_bmi$lambda[i]
-  #print(new_covars); print(new_deviance); print(new_varNum)
-  
-  # See if new covars different to old covars
-  if (new_varNum != old_varNum) {
-    new_addition <- setdiff(new_covars, old_covars) # Find the new covariate that's been added
-    dev_diff <- (new_deviance - old_deviance) * 100 # Diff in deviance value between current and previous lambda value
-    dev_diff <- round(dev_diff, 3)
-    temp <- cbind(new_addition, dev_diff, new_varNum, new_lambda) # Merge with template data frame
-    df <- rbind(df, temp)
-  }
-  
-  # Rename the old covars, deviance and variable number
-  old_covars <- new_covars
-  old_deviance <- new_deviance
-  old_varNum <- new_varNum
-}
-
-colnames(df) <- c("Variables", "DevDiff", "VarNum", "Lambda")
-df
-
-# If two variables added at once, combine names together (else impossible to read on plot)
-df$Variables[df$Variables == "age_f7"] <- "covars"
-df$Variables[df$Variables == "crit2"] <- "crit2/green_dec23_int"
-df$Variables[df$Variables == "green_inc12"] <- "green_inc12/green_dec12"
-df
-
-df <- df[df$Variables != "male", ]
-df <- df[df$Variables != "white", ]
-df <- df[df$Variables != "deprived", ]
-df <- df[df$Variables != "green_dec23_int", ]
-df <- df[df$Variables != "green_dec12", ]
-df
-
-# Make a var to show number of steps where variables added
-df$steps <- 1:nrow(df)
+# First, use the 'lasso-table' function defined above to pick out the changes in variables and the increment in deviance ratio
+df <- lasso_table(mod_access_dep_bmi)
 df
 
 
@@ -1410,8 +1296,12 @@ x_hypos <- data_access_dep_overweight %>%
 
 x_hypos <- as.matrix(x_hypos)
 
+## Remove the accumulation variables (as high collinearity with critical period hypotheses)
+x_hypos <- x_hypos[,!colnames(x_hypos) %in% c("accumulation", "int_accum")]
+head(x_hypos)
 
-## Run the Lasso model using GLMNET. alpha = 1 specifies L1 regularisation (lasso model), and the penalty factor option gives covariates (edu, age, sex and white) weightings of '0', so are always included in the model (default is 1)
+
+## Run the Lasso model using GLMNET. alpha = 1 specifies L1 regularisation (lasso model), and the penalty factor option gives covariates (deprived, age, sex and white) weightings of '0', so are always included in the model (default is 1)
 mod_access_dep_over <- glmnet(x_hypos, data_access_dep_overweight$overweight, family = "binomial",
                               alpha = 1, penalty.factor = (c(0, 0, 0, 0, rep(1, ncol(x_hypos) - 4))))
 
@@ -1431,56 +1321,8 @@ coef(mod_access_dep_over, s = max(mod_access_dep_over$lambda[mod_access_dep_over
 
 ### Visual inspection of results (although just looking at the deviance ratios there doesn't seem to be much of an effect of access to green space at all)
 
-# First, make a loop to pick out the changes in variables and the increment in deviance ratio
-old_covars <- ""
-old_deviance <- 0
-old_varNum <- 0
-old_lambda <- NA
-df <- data.frame(matrix(ncol = 4, nrow = 0))
-df
-
-for (i in 1:length(mod_access_dep_over$df)) {
-  #print(i)
-  new_covars <- attributes(which(mod_access_dep_over$beta[, i] != 0))$names
-  new_deviance <- mod_access_dep_over$dev.ratio[i]
-  new_varNum <- mod_access_dep_over$df[i]
-  new_lambda <- mod_access_dep_over$lambda[i]
-  #print(new_covars); print(new_deviance); print(new_varNum)
-  
-  # See if new covars different to old covars
-  if (new_varNum != old_varNum) {
-    new_addition <- setdiff(new_covars, old_covars) # Find the new covariate that's been added
-    dev_diff <- (new_deviance - old_deviance) * 100 # Diff in deviance value between current and previous lambda value
-    dev_diff <- round(dev_diff, 3)
-    temp <- cbind(new_addition, dev_diff, new_varNum, new_lambda) # Merge with template data frame
-    df <- rbind(df, temp)
-  }
-  
-  # Rename the old covars, deviance and variable number
-  old_covars <- new_covars
-  old_deviance <- new_deviance
-  old_varNum <- new_varNum
-}
-
-colnames(df) <- c("Variables", "DevDiff", "VarNum", "Lambda")
-df
-
-# If two variables added at once, combine names together (else impossible to read on plot)
-df$Variables[df$Variables == "age_f7"] <- "covars"
-df$Variables[df$Variables == "crit2"] <- "crit2/green_inc12_int"
-df$Variables[df$Variables == "int3"] <- "int3/accumulation/green_inc12"
-df
-
-df <- df[df$Variables != "male", ]
-df <- df[df$Variables != "white", ]
-df <- df[df$Variables != "deprived", ]
-df <- df[df$Variables != "green_inc12_int", ]
-df <- df[df$Variables != "accumulation", ]
-df <- df[df$Variables != "green_inc12", ]
-df
-
-# Make a var to show number of steps where variables added
-df$steps <- 1:nrow(df)
+# First, use the 'lasso-table' function defined above to pick out the changes in variables and the increment in deviance ratio
+df <- lasso_table(mod_access_dep_over)
 df
 
 
@@ -1559,8 +1401,12 @@ x_hypos <- data_access_dep_sysBP %>%
 
 x_hypos <- as.matrix(x_hypos)
 
+## Remove the accumulation variables (as high collinearity with critical period hypotheses)
+x_hypos <- x_hypos[,!colnames(x_hypos) %in% c("accumulation", "int_accum")]
+head(x_hypos)
 
-## Run the Lasso model using GLMNET. alpha = 1 specifies L1 regularisation (lasso model), and the penalty factor option gives covariates (edu, age, sex and white) weightings of '0', so are always included in the model (default is 1)
+
+## Run the Lasso model using GLMNET. alpha = 1 specifies L1 regularisation (lasso model), and the penalty factor option gives covariates (deprived, age, sex and white) weightings of '0', so are always included in the model (default is 1)
 mod_access_dep_sysBP <- glmnet(x_hypos, data_access_dep_sysBP$sysBP,
                                alpha = 1, penalty.factor = (c(0, 0, 0, 0, rep(1, ncol(x_hypos) - 4))))
 
@@ -1577,61 +1423,13 @@ coef(mod_access_dep_sysBP, s = max(mod_access_dep_sysBP$lambda[mod_access_dep_sy
 
 coef(mod_access_dep_sysBP, s = max(mod_access_dep_sysBP$lambda[mod_access_dep_sysBP$df == 6])); min(mod_access_dep_sysBP$dev.ratio[mod_access_dep_sysBP$df == 6])
 
-coef(mod_access_dep_sysBP, s = max(mod_access_dep_sysBP$lambda[mod_access_dep_sysBP$df == 8])); min(mod_access_dep_sysBP$dev.ratio[mod_access_dep_sysBP$df == 8])
+coef(mod_access_dep_sysBP, s = max(mod_access_dep_sysBP$lambda[mod_access_dep_sysBP$df == 7])); min(mod_access_dep_sysBP$dev.ratio[mod_access_dep_sysBP$df == 7])
 
 
 ### Visual inspection of results (although just looking at the deviance ratios there doesn't seem to be much of an effect of access to green space at all)
 
-# First, make a loop to pick out the changes in variables and the increment in deviance ratio
-old_covars <- ""
-old_deviance <- 0
-old_varNum <- 0
-old_lambda <- NA
-df <- data.frame(matrix(ncol = 4, nrow = 0))
-df
-
-for (i in 1:length(mod_access_dep_sysBP$df)) {
-  #print(i)
-  new_covars <- attributes(which(mod_access_dep_sysBP$beta[, i] != 0))$names
-  new_deviance <- mod_access_dep_sysBP$dev.ratio[i]
-  new_varNum <- mod_access_dep_sysBP$df[i]
-  new_lambda <- mod_access_dep_sysBP$lambda[i]
-  #print(new_covars); print(new_deviance); print(new_varNum)
-  
-  # See if new covars different to old covars
-  if (new_varNum != old_varNum) {
-    new_addition <- setdiff(new_covars, old_covars) # Find the new covariate that's been added
-    dev_diff <- (new_deviance - old_deviance) * 100 # Diff in deviance value between current and previous lambda value
-    dev_diff <- round(dev_diff, 3)
-    temp <- cbind(new_addition, dev_diff, new_varNum, new_lambda) # Merge with template data frame
-    df <- rbind(df, temp)
-  }
-  
-  # Rename the old covars, deviance and variable number
-  old_covars <- new_covars
-  old_deviance <- new_deviance
-  old_varNum <- new_varNum
-}
-
-colnames(df) <- c("Variables", "DevDiff", "VarNum", "Lambda")
-df
-
-# If two variables added at once, combine names together (else impossible to read on plot)
-df$Variables[df$Variables == "age_f7"] <- "covars"
-df$Variables[df$Variables == "accumulation"] <- "accumulation/green_dec23"
-df$Variables[df$Variables == "int1"] <- "int1/int2/crit3"
-df
-
-df <- df[df$Variables != "male", ]
-df <- df[df$Variables != "white", ]
-df <- df[df$Variables != "deprived", ]
-df <- df[df$Variables != "green_dec23", ]
-df <- df[df$Variables != "int2", ]
-df <- df[df$Variables != "crit3", ]
-df
-
-# Make a var to show number of steps where variables added
-df$steps <- 1:nrow(df)
+# First, use the 'lasso-table' function defined above to pick out the changes in variables and the increment in deviance ratio
+df <- lasso_table(mod_access_dep_sysBP)
 df
 
 
@@ -1664,7 +1462,7 @@ text(df$log_lambda, 0.005, labels = df$Variables, srt = 90, adj = 0)
 dev.off()
 
 
-## From these results, would seem to be that not much is really going on here, although first variable eneterd ('green_dec12_int') does appear to increase model fit marginally... - Will do a likelihood ratio test to see whether inclusion of first parameter(s) added (green_dec12) increases model fit of standard linear regression model
+## From these results, would seem to be that not much is really going on here, although first variable eneterd ('green_dec12_int') does appear to increase model fit marginally... - Will do a likelihood ratio test to see whether inclusion of first parameter(s) added (green_dec12_int) increases model fit of standard linear regression model
 base_mod <- lm(data_access_dep_sysBP$sysBP ~ x_hypos[, "age_f7"] + x_hypos[, "male"] + x_hypos[, "white"] + 
                  x_hypos[, "deprived"])
 summary(base_mod)
@@ -1716,8 +1514,12 @@ x_hypos <- data_access_dep_diaBP %>%
 
 x_hypos <- as.matrix(x_hypos)
 
+## Remove the accumulation variables (as high collinearity with critical period hypotheses)
+x_hypos <- x_hypos[,!colnames(x_hypos) %in% c("accumulation", "int_accum")]
+head(x_hypos)
 
-## Run the Lasso model using GLMNET. alpha = 1 specifies L1 regularisation (lasso model), and the penalty factor option gives covariates (edu, age, sex and white) weightings of '0', so are always included in the model (default is 1)
+
+## Run the Lasso model using GLMNET. alpha = 1 specifies L1 regularisation (lasso model), and the penalty factor option gives covariates (deprived, age, sex and white) weightings of '0', so are always included in the model (default is 1)
 mod_access_dep_diaBP <- glmnet(x_hypos, data_access_dep_diaBP$diaBP,
                                alpha = 1, penalty.factor = (c(0, 0, 0, 0, rep(1, ncol(x_hypos) - 4))))
 
@@ -1739,55 +1541,8 @@ coef(mod_access_dep_diaBP, s = max(mod_access_dep_diaBP$lambda[mod_access_dep_di
 
 ### Visual inspection of results (although just looking at the deviance ratios there doesn't seem to be much of an effect of access to green space at all)
 
-# First, make a loop to pick out the changes in variables and the increment in deviance ratio
-old_covars <- ""
-old_deviance <- 0
-old_varNum <- 0
-old_lambda <- NA
-df <- data.frame(matrix(ncol = 4, nrow = 0))
-df
-
-for (i in 1:length(mod_access_dep_diaBP$df)) {
-  #print(i)
-  new_covars <- attributes(which(mod_access_dep_diaBP$beta[, i] != 0))$names
-  new_deviance <- mod_access_dep_diaBP$dev.ratio[i]
-  new_varNum <- mod_access_dep_diaBP$df[i]
-  new_lambda <- mod_access_dep_diaBP$lambda[i]
-  #print(new_covars); print(new_deviance); print(new_varNum)
-  
-  # See if new covars different to old covars
-  if (new_varNum != old_varNum) {
-    new_addition <- setdiff(new_covars, old_covars) # Find the new covariate that's been added
-    dev_diff <- (new_deviance - old_deviance) * 100 # Diff in deviance value between current and previous lambda value
-    dev_diff <- round(dev_diff, 3)
-    temp <- cbind(new_addition, dev_diff, new_varNum, new_lambda) # Merge with template data frame
-    df <- rbind(df, temp)
-  }
-  
-  # Rename the old covars, deviance and variable number
-  old_covars <- new_covars
-  old_deviance <- new_deviance
-  old_varNum <- new_varNum
-}
-
-colnames(df) <- c("Variables", "DevDiff", "VarNum", "Lambda")
-df
-
-# If two variables added at once, combine names together (else impossible to read on plot)
-df$Variables[df$Variables == "age_f7"] <- "covars"
-df$Variables[df$Variables == "green_inc12_int"] <- "green_inc12_int/green_dec12_int"
-df$Variables[df$Variables == "int2"] <- "int2/int3"
-df
-
-df <- df[df$Variables != "male", ]
-df <- df[df$Variables != "white", ]
-df <- df[df$Variables != "deprived", ]
-df <- df[df$Variables != "green_dec12_int", ]
-df <- df[df$Variables != "int3", ]
-df
-
-# Make a var to show number of steps where variables added
-df$steps <- 1:nrow(df)
+# First, use the 'lasso-table' function defined above to pick out the changes in variables and the increment in deviance ratio
+df <- lasso_table(mod_access_dep_diaBP)
 df
 
 
@@ -1835,7 +1590,7 @@ anova(base_mod, param1_mod)
 # Does adding the next parameter(s) (green_inc12_int and green_dec12_int) improve model fit? No.
 param2_mod <- lm(data_access_dep_diaBP$diaBP ~ x_hypos[, "age_f7"] + x_hypos[, "male"] + 
                    x_hypos[, "white"] + x_hypos[, "deprived"] + x_hypos[, "green_dec12"] + 
-                   x_hypos[, "green_inc23_int"] + x_hypos[, "green_dec12_int"])
+                   x_hypos[, "green_inc12_int"] + x_hypos[, "green_dec12_int"])
 summary(param2_mod)
 
 anova(param1_mod, param2_mod)
@@ -1947,6 +1702,22 @@ x_hypos <- data_access_inc_bmi %>%
 x_hypos <- as.matrix(x_hypos)
 
 
+## Check correlation matrix of all these hypotheses (>0.9 would be a cause for concern)
+dim(x_hypos)
+cor(x_hypos[,5:20])
+cor(x_hypos[,5:20]) > 0.9
+cor(x_hypos[,5:20]) > 0.95
+
+# Biggest issues are with the accumulation variables, which are highly correlated with the critical period variables, so will drop these accumulation variables from these analysis due to collinearity and effectively measuring the same thing.
+x_hypos <- x_hypos[,!colnames(x_hypos) %in% c("accumulation", "int_accum")]
+head(x_hypos)
+
+dim(x_hypos)
+cor(x_hypos[,5:18])
+cor(x_hypos[,5:18]) > 0.9
+cor(x_hypos[,5:18]) > 0.95
+
+
 ## Run the Lasso model using GLMNET. alpha = 1 specifies L1 regularisation (lasso model), and the penalty factor option gives covariates (income, age, sex and white) weightings of '0', so are always included in the model (default is 1)
 mod_access_inc_bmi <- glmnet(x_hypos, data_access_inc_bmi$BMI_f7, 
                              alpha = 1, penalty.factor = (c(0, 0, 0, 0, rep(1, ncol(x_hypos) - 4))))
@@ -1969,55 +1740,8 @@ coef(mod_access_inc_bmi, s = max(mod_access_inc_bmi$lambda[mod_access_inc_bmi$df
 
 ### Visual inspection of results (although just looking at the deviance ratios there doesn't seem to be much of an effect of access to green space at all)
 
-# First, make a loop to pick out the changes in variables and the increment in deviance ratio
-old_covars <- ""
-old_deviance <- 0
-old_varNum <- 0
-old_lambda <- NA
-df <- data.frame(matrix(ncol = 4, nrow = 0))
-df
-
-for (i in 1:length(mod_access_inc_bmi$df)) {
-  #print(i)
-  new_covars <- attributes(which(mod_access_inc_bmi$beta[, i] != 0))$names
-  new_deviance <- mod_access_inc_bmi$dev.ratio[i]
-  new_varNum <- mod_access_inc_bmi$df[i]
-  new_lambda <- mod_access_inc_bmi$lambda[i]
-  #print(new_covars); print(new_deviance); print(new_varNum)
-  
-  # See if new covars different to old covars
-  if (new_varNum != old_varNum) {
-    new_addition <- setdiff(new_covars, old_covars) # Find the new covariate that's been added
-    dev_diff <- (new_deviance - old_deviance) * 100 # Diff in deviance value between current and previous lambda value
-    dev_diff <- round(dev_diff, 3)
-    temp <- cbind(new_addition, dev_diff, new_varNum, new_lambda) # Merge with template data frame
-    df <- rbind(df, temp)
-  }
-  
-  # Rename the old covars, deviance and variable number
-  old_covars <- new_covars
-  old_deviance <- new_deviance
-  old_varNum <- new_varNum
-}
-
-colnames(df) <- c("Variables", "DevDiff", "VarNum", "Lambda")
-df
-
-# If two variables added at once, combine names together (else impossible to read on plot)
-df$Variables[df$Variables == "age_f7"] <- "covars"
-df$Variables[df$Variables == "crit1"] <- "crit1/green_dec23_int"
-df$Variables[df$Variables == "int2"] <- "int2/int3"
-df
-
-df <- df[df$Variables != "male", ]
-df <- df[df$Variables != "white", ]
-df <- df[df$Variables != "lowIncome", ]
-df <- df[df$Variables != "green_dec23_int", ]
-df <- df[df$Variables != "int3", ]
-df
-
-# Make a var to show number of steps where variables added
-df$steps <- 1:nrow(df)
+# First, use the 'lasso-table' function defined above to pick out the changes in variables and the increment in deviance ratio
+df <- lasso_table(mod_access_inc_bmi)
 df
 
 
@@ -2095,6 +1819,10 @@ x_hypos <- data_access_inc_overweight %>%
 
 x_hypos <- as.matrix(x_hypos)
 
+## Remove the accumulation variables (as high collinearity with critical period hypotheses)
+x_hypos <- x_hypos[,!colnames(x_hypos) %in% c("accumulation", "int_accum")]
+head(x_hypos)
+
 
 ## Run the Lasso model using GLMNET. alpha = 1 specifies L1 regularisation (lasso model), and the penalty factor option gives covariates (edu, age, sex and white) weightings of '0', so are always included in the model (default is 1)
 mod_access_inc_over <- glmnet(x_hypos, data_access_inc_overweight$overweight, family = "binomial",
@@ -2116,53 +1844,8 @@ coef(mod_access_inc_over, s = max(mod_access_inc_over$lambda[mod_access_inc_over
 
 ### Visual inspection of results (although just looking at the deviance ratios there doesn't seem to be much of an effect of access to green space at all)
 
-# First, make a loop to pick out the changes in variables and the increment in deviance ratio
-old_covars <- ""
-old_deviance <- 0
-old_varNum <- 0
-old_lambda <- NA
-df <- data.frame(matrix(ncol = 4, nrow = 0))
-df
-
-for (i in 1:length(mod_access_inc_over$df)) {
-  #print(i)
-  new_covars <- attributes(which(mod_access_inc_over$beta[, i] != 0))$names
-  new_deviance <- mod_access_inc_over$dev.ratio[i]
-  new_varNum <- mod_access_inc_over$df[i]
-  new_lambda <- mod_access_inc_over$lambda[i]
-  #print(new_covars); print(new_deviance); print(new_varNum)
-  
-  # See if new covars different to old covars
-  if (new_varNum != old_varNum) {
-    new_addition <- setdiff(new_covars, old_covars) # Find the new covariate that's been added
-    dev_diff <- (new_deviance - old_deviance) * 100 # Diff in deviance value between current and previous lambda value
-    dev_diff <- round(dev_diff, 3)
-    temp <- cbind(new_addition, dev_diff, new_varNum, new_lambda) # Merge with template data frame
-    df <- rbind(df, temp)
-  }
-  
-  # Rename the old covars, deviance and variable number
-  old_covars <- new_covars
-  old_deviance <- new_deviance
-  old_varNum <- new_varNum
-}
-
-colnames(df) <- c("Variables", "DevDiff", "VarNum", "Lambda")
-df
-
-# If two variables added at once, combine names together (else impossible to read on plot)
-df$Variables[df$Variables == "age_f7"] <- "covars"
-df$Variables[df$Variables == "crit1"] <- "crit1/green_inc12"
-df
-
-df <- df[df$Variables != "male", ]
-df <- df[df$Variables != "white", ]
-df <- df[df$Variables != "lowIncome", ]
-df <- df[df$Variables != "green_inc12", ]
-df
-
-# Make a var to show number of steps where variables added
-df$steps <- 1:nrow(df)
+# First, use the 'lasso-table' function defined above to pick out the changes in variables and the increment in deviance ratio
+df <- lasso_table(mod_access_inc_over)
 df
 
 
@@ -2243,6 +1926,10 @@ x_hypos <- data_access_inc_sysBP %>%
 
 x_hypos <- as.matrix(x_hypos)
 
+## Remove the accumulation variables (as high collinearity with critical period hypotheses)
+x_hypos <- x_hypos[,!colnames(x_hypos) %in% c("accumulation", "int_accum")]
+head(x_hypos)
+
 
 ## Run the Lasso model using GLMNET. alpha = 1 specifies L1 regularisation (lasso model), and the penalty factor option gives covariates (income, age, sex and white) weightings of '0', so are always included in the model (default is 1)
 mod_access_inc_sysBP <- glmnet(x_hypos, data_access_inc_sysBP$sysBP,
@@ -2266,53 +1953,8 @@ coef(mod_access_inc_sysBP, s = max(mod_access_inc_sysBP$lambda[mod_access_inc_sy
 
 ### Visual inspection of results (although just looking at the deviance ratios there doesn't seem to be much of an effect of access to green space at all)
 
-# First, make a loop to pick out the changes in variables and the increment in deviance ratio
-old_covars <- ""
-old_deviance <- 0
-old_varNum <- 0
-old_lambda <- NA
-df <- data.frame(matrix(ncol = 4, nrow = 0))
-df
-
-for (i in 1:length(mod_access_inc_sysBP$df)) {
-  #print(i)
-  new_covars <- attributes(which(mod_access_inc_sysBP$beta[, i] != 0))$names
-  new_deviance <- mod_access_inc_sysBP$dev.ratio[i]
-  new_varNum <- mod_access_inc_sysBP$df[i]
-  new_lambda <- mod_access_inc_sysBP$lambda[i]
-  #print(new_covars); print(new_deviance); print(new_varNum)
-  
-  # See if new covars different to old covars
-  if (new_varNum != old_varNum) {
-    new_addition <- setdiff(new_covars, old_covars) # Find the new covariate that's been added
-    dev_diff <- (new_deviance - old_deviance) * 100 # Diff in deviance value between current and previous lambda value
-    dev_diff <- round(dev_diff, 3)
-    temp <- cbind(new_addition, dev_diff, new_varNum, new_lambda) # Merge with template data frame
-    df <- rbind(df, temp)
-  }
-  
-  # Rename the old covars, deviance and variable number
-  old_covars <- new_covars
-  old_deviance <- new_deviance
-  old_varNum <- new_varNum
-}
-
-colnames(df) <- c("Variables", "DevDiff", "VarNum", "Lambda")
-df
-
-# If two variables added at once, combine names together (else impossible to read on plot)
-df$Variables[df$Variables == "age_f7"] <- "covars"
-df$Variables[df$Variables == "green_dec12"] <- "green_dec12/green_dec12_int"
-df
-
-df <- df[df$Variables != "male", ]
-df <- df[df$Variables != "white", ]
-df <- df[df$Variables != "lowIncome", ]
-df <- df[df$Variables != "green_dec12_int", ]
-df
-
-# Make a var to show number of steps where variables added
-df$steps <- 1:nrow(df)
+# First, use the 'lasso-table' function defined above to pick out the changes in variables and the increment in deviance ratio
+df <- lasso_table(mod_access_inc_sysBP)
 df
 
 
@@ -2367,7 +2009,7 @@ mod.cv
 # Plot the log lambda by MSE to show both 'optimal' and '1SE' models (number of parameters is at top of plot)
 plot(mod.cv)
 
-# Parameters in the 1SE and 'optimal' models - Both just contains just the 4 parameters included by default (age, sex, ethnicity and education), suggesting no association with access to green space exposure
+# Parameters in the 1SE and 'optimal' models - The 1SE model just contains just the 4 parameters included by default (age, sex, ethnicity and education), suggesting no association with access to green space exposure; although the minimal MSE model contains 9 parameters (although the MSE is practically indistinguishable from the null model)
 coef(mod.cv, s = mod.cv$lambda.1se)
 coef(mod.cv, s = mod.cv$lambda.min)
 
@@ -2390,6 +2032,10 @@ x_hypos <- data_access_inc_diaBP %>%
   select(-diaBP)
 
 x_hypos <- as.matrix(x_hypos)
+
+## Remove the accumulation variables (as high collinearity with critical period hypotheses)
+x_hypos <- x_hypos[,!colnames(x_hypos) %in% c("accumulation", "int_accum")]
+head(x_hypos)
 
 
 ## Run the Lasso model using GLMNET. alpha = 1 specifies L1 regularisation (lasso model), and the penalty factor option gives covariates (income, age, sex and white) weightings of '0', so are always included in the model (default is 1)
@@ -2414,53 +2060,8 @@ coef(mod_access_inc_diaBP, s = max(mod_access_inc_diaBP$lambda[mod_access_inc_di
 
 ### Visual inspection of results (although just looking at the deviance ratios there doesn't seem to be much of an effect of access to green space at all)
 
-# First, make a loop to pick out the changes in variables and the increment in deviance ratio
-old_covars <- ""
-old_deviance <- 0
-old_varNum <- 0
-old_lambda <- NA
-df <- data.frame(matrix(ncol = 4, nrow = 0))
-df
-
-for (i in 1:length(mod_access_inc_diaBP$df)) {
-  #print(i)
-  new_covars <- attributes(which(mod_access_inc_diaBP$beta[, i] != 0))$names
-  new_deviance <- mod_access_inc_diaBP$dev.ratio[i]
-  new_varNum <- mod_access_inc_diaBP$df[i]
-  new_lambda <- mod_access_inc_diaBP$lambda[i]
-  #print(new_covars); print(new_deviance); print(new_varNum)
-  
-  # See if new covars different to old covars
-  if (new_varNum != old_varNum) {
-    new_addition <- setdiff(new_covars, old_covars) # Find the new covariate that's been added
-    dev_diff <- (new_deviance - old_deviance) * 100 # Diff in deviance value between current and previous lambda value
-    dev_diff <- round(dev_diff, 3)
-    temp <- cbind(new_addition, dev_diff, new_varNum, new_lambda) # Merge with template data frame
-    df <- rbind(df, temp)
-  }
-  
-  # Rename the old covars, deviance and variable number
-  old_covars <- new_covars
-  old_deviance <- new_deviance
-  old_varNum <- new_varNum
-}
-
-colnames(df) <- c("Variables", "DevDiff", "VarNum", "Lambda")
-df
-
-# If two variables added at once, combine names together (else impossible to read on plot)
-df$Variables[df$Variables == "age_f7"] <- "covars"
-df$Variables[df$Variables == "crit1"] <- "crit1/green_inc23"
-df
-
-df <- df[df$Variables != "male", ]
-df <- df[df$Variables != "white", ]
-df <- df[df$Variables != "lowIncome", ]
-df <- df[df$Variables != "green_inc23", ]
-df
-
-# Make a var to show number of steps where variables added
-df$steps <- 1:nrow(df)
+# First, use the 'lasso-table' function defined above to pick out the changes in variables and the increment in deviance ratio
+df <- lasso_table(mod_access_inc_diaBP)
 df
 
 
@@ -2505,7 +2106,7 @@ summary(param1_mod)
 # Does seem to be an association here, with an increase in green space access between pregnancy and age 4 associated with lower diastolic BP among those with low incomes. While direction may be as predicted (increase in green space associated with lower BP), given that the effect size is tiny and interpretation not clear (why would reducing access to green space be associated with lower BP in previous models, but the opposite effect here?), this could just be the model hooking up to random noise.
 anova(base_mod, param1_mod)
 
-# Does adding the next parameter(s) (green_dec12) improve model fit? Yes, apparently. Now, an overall decrease in green space from pregnancy to age 4 associated with lower BP (this effect was found for the other diastolic BP results above, but doens't make a huge amount of biological sense.)
+# Does adding the next parameter(s) (green_dec12) improve model fit? Yes, apparently. Now, an overall decrease in green space from pregnancy to age 4 associated with lower BP (this effect was found for the other diastolic BP results above, but doesn't make a huge amount of biological sense.)
 param2_mod <- lm(data_access_inc_diaBP$diaBP ~ x_hypos[, "age_f7"] + x_hypos[, "male"] + 
                    x_hypos[, "white"] + x_hypos[, "lowIncome"] + x_hypos[, "green_inc12_int"] +
                    x_hypos[, "green_dec12"])
@@ -2621,6 +2222,22 @@ x_hypos <- data_dist_edu_bmi %>%
 x_hypos <- as.matrix(x_hypos)
 
 
+## Check correlation matrix of all these hypotheses (>0.9 would be a cause for concern)
+dim(x_hypos)
+cor(x_hypos[,5:16])
+cor(x_hypos[,5:16]) > 0.9
+cor(x_hypos[,5:16]) > 0.95
+
+# Biggest issues are with the accumulation variables, which are highly correlated with the critical period variables, so will drop these accumulation variables from these analysis due to collinearity and effectively measuring the same thing.
+x_hypos <- x_hypos[,!colnames(x_hypos) %in% c("accumulation", "int_accum")]
+head(x_hypos)
+
+dim(x_hypos)
+cor(x_hypos[,5:14])
+cor(x_hypos[,5:14]) > 0.9
+cor(x_hypos[,5:14]) > 0.95
+
+
 ## Run the Lasso model using GLMNET. alpha = 1 specifies L1 regularisation (lasso model), and the penalty factor option gives covariates (edu, age, sex and white) weightings of '0', so are always included in the model (default is 1)
 mod_dist_edu_bmi <- glmnet(x_hypos, data_dist_edu_bmi$BMI_f7, 
                              alpha = 1, penalty.factor = (c(0, 0, 0, 0, rep(1, ncol(x_hypos) - 4))))
@@ -2643,54 +2260,8 @@ coef(mod_dist_edu_bmi, s = max(mod_dist_edu_bmi$lambda[mod_dist_edu_bmi$df == 9]
 
 ### Visual inspection of results (although just looking at the deviance ratios there doesn't seem to be much of an effect of access to green space at all)
 
-# First, make a loop to pick out the changes in variables and the increment in deviance ratio
-old_covars <- ""
-old_deviance <- 0
-old_varNum <- 0
-old_lambda <- NA
-df <- data.frame(matrix(ncol = 4, nrow = 0))
-df
-
-for (i in 1:length(mod_dist_edu_bmi$df)) {
-  #print(i)
-  new_covars <- attributes(which(mod_dist_edu_bmi$beta[, i] != 0))$names
-  new_deviance <- mod_dist_edu_bmi$dev.ratio[i]
-  new_varNum <- mod_dist_edu_bmi$df[i]
-  new_lambda <- mod_dist_edu_bmi$lambda[i]
-  #print(new_covars); print(new_deviance); print(new_varNum)
-  
-  # See if new covars different to old covars
-  if (new_varNum != old_varNum) {
-    new_addition <- setdiff(new_covars, old_covars) # Find the new covariate that's been added
-    dev_diff <- (new_deviance - old_deviance) * 100 # Diff in deviance value between current and previous lambda value
-    dev_diff <- round(dev_diff, 3)
-    temp <- cbind(new_addition, dev_diff, new_varNum, new_lambda) # Merge with template data frame
-    df <- rbind(df, temp)
-  }
-  
-  # Rename the old covars, deviance and variable number
-  old_covars <- new_covars
-  old_deviance <- new_deviance
-  old_varNum <- new_varNum
-}
-
-colnames(df) <- c("Variables", "DevDiff", "VarNum", "Lambda")
-df
-
-# If two variables added at once, combine names together (else impossible to read on plot)
-df$Variables[df$Variables == "age_f7"] <- "covars"
-df$Variables[df$Variables == "crit2"] <- "crit2/crit3/green_ch12"
-df
-
-df <- df[df$Variables != "male", ]
-df <- df[df$Variables != "white", ]
-df <- df[df$Variables != "edu", ]
-df <- df[df$Variables != "crit3", ]
-df <- df[df$Variables != "green_ch12", ]
-df
-
-# Make a var to show number of steps where variables added
-df$steps <- 1:nrow(df)
+# First, use the 'lasso-table' function defined above to pick out the changes in variables and the increment in deviance ratio
+df <- lasso_table(mod_dist_edu_bmi)
 df
 
 
@@ -2768,6 +2339,10 @@ x_hypos <- data_dist_edu_overweight %>%
 
 x_hypos <- as.matrix(x_hypos)
 
+## Remove the accumulation variables (as high collinearity with critical period hypotheses)
+x_hypos <- x_hypos[,!colnames(x_hypos) %in% c("accumulation", "int_accum")]
+head(x_hypos)
+
 
 ## Run the Lasso model using GLMNET. alpha = 1 specifies L1 regularisation (lasso model), and the penalty factor option gives covariates (edu, age, sex and white) weightings of '0', so are always included in the model (default is 1)
 mod_dist_edu_over <- glmnet(x_hypos, data_dist_edu_overweight$overweight, family = "binomial",
@@ -2791,52 +2366,10 @@ coef(mod_dist_edu_over, s = max(mod_dist_edu_over$lambda[mod_dist_edu_over$df ==
 
 ### Visual inspection of results (although just looking at the deviance ratios there doesn't seem to be much of an effect of access to green space at all)
 
-# First, make a loop to pick out the changes in variables and the increment in deviance ratio
-old_covars <- ""
-old_deviance <- 0
-old_varNum <- 0
-old_lambda <- NA
-df <- data.frame(matrix(ncol = 4, nrow = 0))
+# First, use the 'lasso-table' function defined above to pick out the changes in variables and the increment in deviance ratio
+df <- lasso_table(mod_dist_edu_over)
 df
 
-for (i in 1:length(mod_dist_edu_over$df)) {
-  #print(i)
-  new_covars <- attributes(which(mod_dist_edu_over$beta[, i] != 0))$names
-  new_deviance <- mod_dist_edu_over$dev.ratio[i]
-  new_varNum <- mod_dist_edu_over$df[i]
-  new_lambda <- mod_dist_edu_over$lambda[i]
-  #print(new_covars); print(new_deviance); print(new_varNum)
-  
-  # See if new covars different to old covars
-  if (new_varNum != old_varNum) {
-    new_addition <- setdiff(new_covars, old_covars) # Find the new covariate that's been added
-    dev_diff <- (new_deviance - old_deviance) * 100 # Diff in deviance value between current and previous lambda value
-    dev_diff <- round(dev_diff, 3)
-    temp <- cbind(new_addition, dev_diff, new_varNum, new_lambda) # Merge with template data frame
-    df <- rbind(df, temp)
-  }
-  
-  # Rename the old covars, deviance and variable number
-  old_covars <- new_covars
-  old_deviance <- new_deviance
-  old_varNum <- new_varNum
-}
-
-colnames(df) <- c("Variables", "DevDiff", "VarNum", "Lambda")
-df
-
-# If two variables added at once, combine names together (else impossible to read on plot)
-df$Variables[df$Variables == "age_f7"] <- "covars"
-df
-
-df <- df[df$Variables != "male", ]
-df <- df[df$Variables != "white", ]
-df <- df[df$Variables != "edu", ]
-df
-
-# Make a var to show number of steps where variables added
-df$steps <- 1:nrow(df)
-df
 
 
 # Make a plot of deviance ratio by lambda value, to show the time variables were entered and the improvement in model fit. Need to be careful about scale of y-axis, as improvement in model fit may not that large.
@@ -2913,6 +2446,10 @@ x_hypos <- data_dist_edu_sysBP %>%
 
 x_hypos <- as.matrix(x_hypos)
 
+## Remove the accumulation variables (as high collinearity with critical period hypotheses)
+x_hypos <- x_hypos[,!colnames(x_hypos) %in% c("accumulation", "int_accum")]
+head(x_hypos)
+
 
 ## Run the Lasso model using GLMNET. alpha = 1 specifies L1 regularisation (lasso model), and the penalty factor option gives covariates (edu, age, sex and white) weightings of '0', so are always included in the model (default is 1)
 mod_dist_edu_sysBP <- glmnet(x_hypos, data_dist_edu_sysBP$sysBP,
@@ -2927,8 +2464,6 @@ plot(mod_dist_edu_sysBP)
 # Look at the variables included at each step
 coef(mod_dist_edu_sysBP, s = max(mod_dist_edu_sysBP$lambda[mod_dist_edu_sysBP$df == 4])); min(mod_dist_edu_sysBP$dev.ratio[mod_dist_edu_sysBP$df == 4])
 
-coef(mod_dist_edu_sysBP, s = max(mod_dist_edu_sysBP$lambda[mod_dist_edu_sysBP$df == 5])); min(mod_dist_edu_sysBP$dev.ratio[mod_dist_edu_sysBP$df == 5])
-
 coef(mod_dist_edu_sysBP, s = max(mod_dist_edu_sysBP$lambda[mod_dist_edu_sysBP$df == 6])); min(mod_dist_edu_sysBP$dev.ratio[mod_dist_edu_sysBP$df == 6])
 
 coef(mod_dist_edu_sysBP, s = max(mod_dist_edu_sysBP$lambda[mod_dist_edu_sysBP$df == 7])); min(mod_dist_edu_sysBP$dev.ratio[mod_dist_edu_sysBP$df == 7])
@@ -2936,51 +2471,8 @@ coef(mod_dist_edu_sysBP, s = max(mod_dist_edu_sysBP$lambda[mod_dist_edu_sysBP$df
 
 ### Visual inspection of results (although just looking at the deviance ratios there doesn't seem to be much of an effect of access to green space at all)
 
-# First, make a loop to pick out the changes in variables and the increment in deviance ratio
-old_covars <- ""
-old_deviance <- 0
-old_varNum <- 0
-old_lambda <- NA
-df <- data.frame(matrix(ncol = 4, nrow = 0))
-df
-
-for (i in 1:length(mod_dist_edu_sysBP$df)) {
-  #print(i)
-  new_covars <- attributes(which(mod_dist_edu_sysBP$beta[, i] != 0))$names
-  new_deviance <- mod_dist_edu_sysBP$dev.ratio[i]
-  new_varNum <- mod_dist_edu_sysBP$df[i]
-  new_lambda <- mod_dist_edu_sysBP$lambda[i]
-  #print(new_covars); print(new_deviance); print(new_varNum)
-  
-  # See if new covars different to old covars
-  if (new_varNum != old_varNum) {
-    new_addition <- setdiff(new_covars, old_covars) # Find the new covariate that's been added
-    dev_diff <- (new_deviance - old_deviance) * 100 # Diff in deviance value between current and previous lambda value
-    dev_diff <- round(dev_diff, 3)
-    temp <- cbind(new_addition, dev_diff, new_varNum, new_lambda) # Merge with template data frame
-    df <- rbind(df, temp)
-  }
-  
-  # Rename the old covars, deviance and variable number
-  old_covars <- new_covars
-  old_deviance <- new_deviance
-  old_varNum <- new_varNum
-}
-
-colnames(df) <- c("Variables", "DevDiff", "VarNum", "Lambda")
-df
-
-# If two variables added at once, combine names together (else impossible to read on plot)
-df$Variables[df$Variables == "age_f7"] <- "covars"
-df
-
-df <- df[df$Variables != "male", ]
-df <- df[df$Variables != "white", ]
-df <- df[df$Variables != "edu", ]
-df
-
-# Make a var to show number of steps where variables added
-df$steps <- 1:nrow(df)
+# First, use the 'lasso-table' function defined above to pick out the changes in variables and the increment in deviance ratio
+df <- lasso_table(mod_dist_edu_sysBP)
 df
 
 
@@ -3013,21 +2505,22 @@ text(df$log_lambda, 0.005, labels = df$Variables, srt = 90, adj = 0)
 dev.off()
 
 
-## From these results, would seem to be that nothing is really going on here - Will do a likelihood ratio test to see whether inclusion of first parameter(s) added (accumulation) increases model fit of standard linear regression model
+## From these results, would seem to be that nothing is really going on here - Will do a likelihood ratio test to see whether inclusion of first parameter(s) added (crit2 and int3) increases model fit of standard linear regression model
 base_mod <- lm(data_dist_edu_sysBP$sysBP ~ x_hypos[, "age_f7"] + x_hypos[, "male"] + x_hypos[, "white"] + 
                  x_hypos[, "edu"])
 summary(base_mod)
 
 param1_mod <- lm(data_dist_edu_sysBP$sysBP ~ x_hypos[, "age_f7"] + x_hypos[, "male"] + 
-                   x_hypos[, "white"] + x_hypos[, "edu"] + x_hypos[, "accumulation"])
+                   x_hypos[, "white"] + x_hypos[, "edu"] + x_hypos[, "crit2"] + x_hypos[, "int3"])
 summary(param1_mod)
 
-# Is potentially a weak effect of accumulation, with higher average distance associated with ever-so-marginally lower systolic blood pressure (but effect is so marginal, and in opposite direction to what would be expected, may just be latching on to random noise in the data).
+# Is potentially a weak effect of crit2 and int3, with higher average distance associated with ever-so-marginally lower systolic blood pressure, which may be stronger in those with more education (but effect is so marginal, and in opposite direction to what would be expected, may just be latching on to random noise in the data).
 anova(base_mod, param1_mod)
 
-# What about adding next variable (int3)? No.
+# What about adding next variable (crit1)? No.
 param2_mod <- lm(data_dist_edu_sysBP$sysBP ~ x_hypos[, "age_f7"] + x_hypos[, "male"] + 
-                   x_hypos[, "white"] + x_hypos[, "edu"] + x_hypos[, "accumulation"] + x_hypos[, "int3"])
+                   x_hypos[, "white"] + x_hypos[, "edu"] + x_hypos[, "crit2"] + x_hypos[, "int3"] + 
+                   x_hypos[, "crit1"])
 summary(param2_mod)
 
 anova(param1_mod, param2_mod)
@@ -3041,7 +2534,7 @@ mod.cv
 # Plot the log lambda by MSE to show both 'optimal' and '1SE' models (number of parameters is at top of plot)
 plot(mod.cv) 
 
-# Parameters in the 1SE and 'optimal' models - Both just contains just the 4 parameters included by default (age, sex, ethnicity and education), suggesting no association with distance to green space exposure
+# Parameters in the 1SE and 'optimal' models - The 1SE model just contains just the 4 parameters included by default (age, sex, ethnicity and education), suggesting no association with distance to green space exposure; while the minimal model includes 11 parameters, but the MSE is practically identical to the null model
 coef(mod.cv, s = mod.cv$lambda.1se)
 coef(mod.cv, s = mod.cv$lambda.min)
 
@@ -3064,6 +2557,10 @@ x_hypos <- data_dist_edu_diaBP %>%
   select(-diaBP)
 
 x_hypos <- as.matrix(x_hypos)
+
+## Remove the accumulation variables (as high collinearity with critical period hypotheses)
+x_hypos <- x_hypos[,!colnames(x_hypos) %in% c("accumulation", "int_accum")]
+head(x_hypos)
 
 
 ## Run the Lasso model using GLMNET. alpha = 1 specifies L1 regularisation (lasso model), and the penalty factor option gives covariates (edu, age, sex and white) weightings of '0', so are always included in the model (default is 1)
@@ -3088,51 +2585,8 @@ coef(mod_dist_edu_diaBP, s = max(mod_dist_edu_diaBP$lambda[mod_dist_edu_diaBP$df
 
 ### Visual inspection of results (although just looking at the deviance ratios there doesn't seem to be much of an effect of access to green space at all)
 
-# First, make a loop to pick out the changes in variables and the increment in deviance ratio
-old_covars <- ""
-old_deviance <- 0
-old_varNum <- 0
-old_lambda <- NA
-df <- data.frame(matrix(ncol = 4, nrow = 0))
-df
-
-for (i in 1:length(mod_dist_edu_diaBP$df)) {
-  #print(i)
-  new_covars <- attributes(which(mod_dist_edu_diaBP$beta[, i] != 0))$names
-  new_deviance <- mod_dist_edu_diaBP$dev.ratio[i]
-  new_varNum <- mod_dist_edu_diaBP$df[i]
-  new_lambda <- mod_dist_edu_diaBP$lambda[i]
-  #print(new_covars); print(new_deviance); print(new_varNum)
-  
-  # See if new covars different to old covars
-  if (new_varNum != old_varNum) {
-    new_addition <- setdiff(new_covars, old_covars) # Find the new covariate that's been added
-    dev_diff <- (new_deviance - old_deviance) * 100 # Diff in deviance value between current and previous lambda value
-    dev_diff <- round(dev_diff, 3)
-    temp <- cbind(new_addition, dev_diff, new_varNum, new_lambda) # Merge with template data frame
-    df <- rbind(df, temp)
-  }
-  
-  # Rename the old covars, deviance and variable number
-  old_covars <- new_covars
-  old_deviance <- new_deviance
-  old_varNum <- new_varNum
-}
-
-colnames(df) <- c("Variables", "DevDiff", "VarNum", "Lambda")
-df
-
-# If two variables added at once, combine names together (else impossible to read on plot)
-df$Variables[df$Variables == "age_f7"] <- "covars"
-df
-
-df <- df[df$Variables != "male", ]
-df <- df[df$Variables != "white", ]
-df <- df[df$Variables != "edu", ]
-df
-
-# Make a var to show number of steps where variables added
-df$steps <- 1:nrow(df)
+# First, use the 'lasso-table' function defined above to pick out the changes in variables and the increment in deviance ratio
+df <- lasso_table(mod_dist_edu_diaBP)
 df
 
 
@@ -3271,6 +2725,22 @@ x_hypos <- data_dist_dep_bmi %>%
 x_hypos <- as.matrix(x_hypos)
 
 
+## Check correlation matrix of all these hypotheses (>0.9 would be a cause for concern)
+dim(x_hypos)
+cor(x_hypos[,5:16])
+cor(x_hypos[,5:16]) > 0.9
+cor(x_hypos[,5:16]) > 0.95
+
+# Biggest issues are with the accumulation variables, which are highly correlated with the critical period variables, so will drop these accumulation variables from these analysis due to collinearity and effectively measuring the same thing.
+x_hypos <- x_hypos[,!colnames(x_hypos) %in% c("accumulation", "int_accum")]
+head(x_hypos)
+
+dim(x_hypos)
+cor(x_hypos[,5:14])
+cor(x_hypos[,5:14]) > 0.9
+cor(x_hypos[,5:14]) > 0.95
+
+
 ## Run the Lasso model using GLMNET. alpha = 1 specifies L1 regularisation (lasso model), and the penalty factor option gives covariates (dep, age, sex and white) weightings of '0', so are always included in the model (default is 1)
 mod_dist_dep_bmi <- glmnet(x_hypos, data_dist_dep_bmi$BMI_f7, 
                              alpha = 1, penalty.factor = (c(0, 0, 0, 0, rep(1, ncol(x_hypos) - 4))))
@@ -3293,53 +2763,8 @@ coef(mod_dist_dep_bmi, s = max(mod_dist_dep_bmi$lambda[mod_dist_dep_bmi$df == 7]
 
 ### Visual inspection of results (although just looking at the deviance ratios there doesn't seem to be much of an effect of access to green space at all)
 
-# First, make a loop to pick out the changes in variables and the increment in deviance ratio
-old_covars <- ""
-old_deviance <- 0
-old_varNum <- 0
-old_lambda <- NA
-df <- data.frame(matrix(ncol = 4, nrow = 0))
-df
-
-for (i in 1:length(mod_dist_dep_bmi$df)) {
-  #print(i)
-  new_covars <- attributes(which(mod_dist_dep_bmi$beta[, i] != 0))$names
-  new_deviance <- mod_dist_dep_bmi$dev.ratio[i]
-  new_varNum <- mod_dist_dep_bmi$df[i]
-  new_lambda <- mod_dist_dep_bmi$lambda[i]
-  #print(new_covars); print(new_deviance); print(new_varNum)
-  
-  # See if new covars different to old covars
-  if (new_varNum != old_varNum) {
-    new_addition <- setdiff(new_covars, old_covars) # Find the new covariate that's been added
-    dev_diff <- (new_deviance - old_deviance) * 100 # Diff in deviance value between current and previous lambda value
-    dev_diff <- round(dev_diff, 3)
-    temp <- cbind(new_addition, dev_diff, new_varNum, new_lambda) # Merge with template data frame
-    df <- rbind(df, temp)
-  }
-  
-  # Rename the old covars, deviance and variable number
-  old_covars <- new_covars
-  old_deviance <- new_deviance
-  old_varNum <- new_varNum
-}
-
-colnames(df) <- c("Variables", "DevDiff", "VarNum", "Lambda")
-df
-
-# If two variables added at once, combine names together (else impossible to read on plot)
-df$Variables[df$Variables == "age_f7"] <- "covars"
-df$Variables[df$Variables == "int2"] <- "int2/green_ch23_int"
-df
-
-df <- df[df$Variables != "male", ]
-df <- df[df$Variables != "white", ]
-df <- df[df$Variables != "deprived", ]
-df <- df[df$Variables != "green_ch23_int", ]
-df
-
-# Make a var to show number of steps where variables added
-df$steps <- 1:nrow(df)
+# First, use the 'lasso-table' function defined above to pick out the changes in variables and the increment in deviance ratio
+df <- lasso_table(mod_dist_dep_bmi)
 df
 
 
@@ -3393,7 +2818,7 @@ mod.cv
 # Plot the log lambda by MSE to show both 'optimal' and '1SE' models (number of parameters is at the top of the plot)
 plot(mod.cv) 
 
-# Parameters in the 1SE and 'optimal' models - Both just contains just the 4 parameters included by default (age, sex, ethnicity and education), suggesting no association with distance to green space exposure
+# Parameters in the 1SE and 'optimal' models - The 1SE model just contains just the 4 parameters included by default (age, sex, ethnicity and education), suggesting no association with distance to green space exposure; while the minimal MSE model contains 6 parameters, the difference in MSE to the null model is practically nothing.
 coef(mod.cv, s = mod.cv$lambda.1se)
 coef(mod.cv, s = mod.cv$lambda.min)
 
@@ -3417,6 +2842,10 @@ x_hypos <- data_dist_dep_overweight %>%
 
 x_hypos <- as.matrix(x_hypos)
 
+## Remove the accumulation variables (as high collinearity with critical period hypotheses)
+x_hypos <- x_hypos[,!colnames(x_hypos) %in% c("accumulation", "int_accum")]
+head(x_hypos)
+
 
 ## Run the Lasso model using GLMNET. alpha = 1 specifies L1 regularisation (lasso model), and the penalty factor option gives covariates (edu, age, sex and white) weightings of '0', so are always included in the model (default is 1)
 mod_dist_dep_over <- glmnet(x_hypos, data_dist_dep_overweight$overweight, family = "binomial",
@@ -3438,53 +2867,8 @@ coef(mod_dist_dep_over, s = max(mod_dist_dep_over$lambda[mod_dist_dep_over$df ==
 
 ### Visual inspection of results (although just looking at the deviance ratios there doesn't seem to be much of an effect of access to green space at all)
 
-# First, make a loop to pick out the changes in variables and the increment in deviance ratio
-old_covars <- ""
-old_deviance <- 0
-old_varNum <- 0
-old_lambda <- NA
-df <- data.frame(matrix(ncol = 4, nrow = 0))
-df
-
-for (i in 1:length(mod_dist_dep_over$df)) {
-  #print(i)
-  new_covars <- attributes(which(mod_dist_dep_over$beta[, i] != 0))$names
-  new_deviance <- mod_dist_dep_over$dev.ratio[i]
-  new_varNum <- mod_dist_dep_over$df[i]
-  new_lambda <- mod_dist_dep_over$lambda[i]
-  #print(new_covars); print(new_deviance); print(new_varNum)
-  
-  # See if new covars different to old covars
-  if (new_varNum != old_varNum) {
-    new_addition <- setdiff(new_covars, old_covars) # Find the new covariate that's been added
-    dev_diff <- (new_deviance - old_deviance) * 100 # Diff in deviance value between current and previous lambda value
-    dev_diff <- round(dev_diff, 3)
-    temp <- cbind(new_addition, dev_diff, new_varNum, new_lambda) # Merge with template data frame
-    df <- rbind(df, temp)
-  }
-  
-  # Rename the old covars, deviance and variable number
-  old_covars <- new_covars
-  old_deviance <- new_deviance
-  old_varNum <- new_varNum
-}
-
-colnames(df) <- c("Variables", "DevDiff", "VarNum", "Lambda")
-df
-
-# If two variables added at once, combine names together (else impossible to read on plot)
-df$Variables[df$Variables == "age_f7"] <- "covars"
-df$Variables[df$Variables == "int1"] <- "int1/crit2"
-df
-
-df <- df[df$Variables != "male", ]
-df <- df[df$Variables != "white", ]
-df <- df[df$Variables != "deprived", ]
-df <- df[df$Variables != "crit2", ]
-df
-
-# Make a var to show number of steps where variables added
-df$steps <- 1:nrow(df)
+# First, use the 'lasso-table' function defined above to pick out the changes in variables and the increment in deviance ratio
+df <- lasso_table(mod_dist_dep_over)
 df
 
 
@@ -3563,6 +2947,10 @@ x_hypos <- data_dist_dep_sysBP %>%
 
 x_hypos <- as.matrix(x_hypos)
 
+## Remove the accumulation variables (as high collinearity with critical period hypotheses)
+x_hypos <- x_hypos[,!colnames(x_hypos) %in% c("accumulation", "int_accum")]
+head(x_hypos)
+
 
 ## Run the Lasso model using GLMNET. alpha = 1 specifies L1 regularisation (lasso model), and the penalty factor option gives covariates (edu, age, sex and white) weightings of '0', so are always included in the model (default is 1)
 mod_dist_dep_sysBP <- glmnet(x_hypos, data_dist_dep_sysBP$sysBP,
@@ -3586,51 +2974,8 @@ coef(mod_dist_dep_sysBP, s = max(mod_dist_dep_sysBP$lambda[mod_dist_dep_sysBP$df
 
 ### Visual inspection of results (although just looking at the deviance ratios there doesn't seem to be much of an effect of access to green space at all)
 
-# First, make a loop to pick out the changes in variables and the increment in deviance ratio
-old_covars <- ""
-old_deviance <- 0
-old_varNum <- 0
-old_lambda <- NA
-df <- data.frame(matrix(ncol = 4, nrow = 0))
-df
-
-for (i in 1:length(mod_dist_dep_sysBP$df)) {
-  #print(i)
-  new_covars <- attributes(which(mod_dist_dep_sysBP$beta[, i] != 0))$names
-  new_deviance <- mod_dist_dep_sysBP$dev.ratio[i]
-  new_varNum <- mod_dist_dep_sysBP$df[i]
-  new_lambda <- mod_dist_dep_sysBP$lambda[i]
-  #print(new_covars); print(new_deviance); print(new_varNum)
-  
-  # See if new covars different to old covars
-  if (new_varNum != old_varNum) {
-    new_addition <- setdiff(new_covars, old_covars) # Find the new covariate that's been added
-    dev_diff <- (new_deviance - old_deviance) * 100 # Diff in deviance value between current and previous lambda value
-    dev_diff <- round(dev_diff, 3)
-    temp <- cbind(new_addition, dev_diff, new_varNum, new_lambda) # Merge with template data frame
-    df <- rbind(df, temp)
-  }
-  
-  # Rename the old covars, deviance and variable number
-  old_covars <- new_covars
-  old_deviance <- new_deviance
-  old_varNum <- new_varNum
-}
-
-colnames(df) <- c("Variables", "DevDiff", "VarNum", "Lambda")
-df
-
-# If two variables added at once, combine names together (else impossible to read on plot)
-df$Variables[df$Variables == "age_f7"] <- "covars"
-df
-
-df <- df[df$Variables != "male", ]
-df <- df[df$Variables != "white", ]
-df <- df[df$Variables != "deprived", ]
-df
-
-# Make a var to show number of steps where variables added
-df$steps <- 1:nrow(df)
+# First, use the 'lasso-table' function defined above to pick out the changes in variables and the increment in deviance ratio
+df <- lasso_table(mod_dist_dep_sysBP)
 df
 
 
@@ -3663,21 +3008,21 @@ text(df$log_lambda, 0.005, labels = df$Variables, srt = 90, adj = 0)
 dev.off()
 
 
-## From these results, would seem to be that not much is really going on here, although first variable eneterd ('accumulation') does appear to increase model fit marginally... - Will do a likelihood ratio test to see whether inclusion of first parameter(s) added (green_dec12) increases model fit of standard linear regression model
+## From these results, would seem to be that not much is really going on here, although first variable eneterd (crit2) does appear to increase model fit marginally... - Will do a likelihood ratio test to see whether inclusion of first parameter(s) added (green_dec12) increases model fit of standard linear regression model
 base_mod <- lm(data_dist_dep_sysBP$sysBP ~ x_hypos[, "age_f7"] + x_hypos[, "male"] + x_hypos[, "white"] + 
                  x_hypos[, "deprived"])
 summary(base_mod)
 
 param1_mod <- lm(data_dist_dep_sysBP$sysBP ~ x_hypos[, "age_f7"] + x_hypos[, "male"] + 
-                   x_hypos[, "white"] + x_hypos[, "deprived"] + x_hypos[, "accumulation"])
+                   x_hypos[, "white"] + x_hypos[, "deprived"] + x_hypos[, "crit2"])
 summary(param1_mod)
 
-# Does seem to be a marginal association here, with an increase in average distance from space over all time-points associated with lower systolic BP. However, given that the effect size is tiny and interpretation not clear (why would increasing distance to green space be associated with lower BP?), this could just be the model hooking up to random noise.
+# Does seem to be a marginal association here at best, with an increase in distance from space at time 2 associated with lower systolic BP. However, given that the effect size is tiny and interpretation not clear (why would increasing distance to green space be associated with lower BP?), this could just be the model hooking up to random noise.
 anova(base_mod, param1_mod)
 
-# Does adding the next parameter (crit2) improve model fit? No.
+# Does adding the next parameter (crit1) improve model fit? No.
 param2_mod <- lm(data_dist_dep_sysBP$sysBP ~ x_hypos[, "age_f7"] + x_hypos[, "male"] + 
-                   x_hypos[, "white"] + x_hypos[, "deprived"] + x_hypos[, "accumulation"] + x_hypos[, "crit2"])
+                   x_hypos[, "white"] + x_hypos[, "deprived"] + x_hypos[, "crit2"] + x_hypos[, "crit1"])
 summary(param2_mod)
 
 anova(param1_mod, param2_mod)
@@ -3691,12 +3036,12 @@ mod.cv
 # Plot the log lambda by MSE to show both 'optimal' and '1SE' models (number of parameters is at top of plot)
 plot(mod.cv) 
 
-# Parameters in the 1SE and 'optimal' models - The 1SE model is just the null/covariate-only model, while the 'optimal'/lowest MSE model also contains green_dec12_int. The difference in MSE is minimal, though, so not especially convincing. Suggests at best a very weak association with access to green space exposure
+# Parameters in the 1SE and 'optimal' models - The 1SE model is just the null/covariate-only model, while the 'optimal'/lowest MSE model also contains crit1 and crit2. The difference in MSE is minimal, though, so not especially convincing. Suggests at best a very weak association with access to green space exposure
 coef(mod.cv, s = mod.cv$lambda.1se)
 coef(mod.cv, s = mod.cv$lambda.min)
 
 
-### All methods match up relatively well, and indicate little association between distance to green space in childhood and systolic blood pressure at age 7 (when controlling for ethnicity and household deprivation), although potentially increase in average distance to green space (accumulation) and increased distanceat age 4 linked to lower systolic BP.
+### All methods match up relatively well, and indicate little association between distance to green space in childhood and systolic blood pressure at age 7 (when controlling for ethnicity and household deprivation), although potentially increase in average distance to green space at age 4 linked to lower systolic BP.
 
 
 
@@ -3714,6 +3059,10 @@ x_hypos <- data_dist_dep_diaBP %>%
   select(-diaBP)
 
 x_hypos <- as.matrix(x_hypos)
+
+## Remove the accumulation variables (as high collinearity with critical period hypotheses)
+x_hypos <- x_hypos[,!colnames(x_hypos) %in% c("accumulation", "int_accum")]
+head(x_hypos)
 
 
 ## Run the Lasso model using GLMNET. alpha = 1 specifies L1 regularisation (lasso model), and the penalty factor option gives covariates (edu, age, sex and white) weightings of '0', so are always included in the model (default is 1)
@@ -3738,51 +3087,8 @@ coef(mod_dist_dep_diaBP, s = max(mod_dist_dep_diaBP$lambda[mod_dist_dep_diaBP$df
 
 ### Visual inspection of results (although just looking at the deviance ratios there doesn't seem to be much of an effect of access to green space at all)
 
-# First, make a loop to pick out the changes in variables and the increment in deviance ratio
-old_covars <- ""
-old_deviance <- 0
-old_varNum <- 0
-old_lambda <- NA
-df <- data.frame(matrix(ncol = 4, nrow = 0))
-df
-
-for (i in 1:length(mod_dist_dep_diaBP$df)) {
-  #print(i)
-  new_covars <- attributes(which(mod_dist_dep_diaBP$beta[, i] != 0))$names
-  new_deviance <- mod_dist_dep_diaBP$dev.ratio[i]
-  new_varNum <- mod_dist_dep_diaBP$df[i]
-  new_lambda <- mod_dist_dep_diaBP$lambda[i]
-  #print(new_covars); print(new_deviance); print(new_varNum)
-  
-  # See if new covars different to old covars
-  if (new_varNum != old_varNum) {
-    new_addition <- setdiff(new_covars, old_covars) # Find the new covariate that's been added
-    dev_diff <- (new_deviance - old_deviance) * 100 # Diff in deviance value between current and previous lambda value
-    dev_diff <- round(dev_diff, 3)
-    temp <- cbind(new_addition, dev_diff, new_varNum, new_lambda) # Merge with template data frame
-    df <- rbind(df, temp)
-  }
-  
-  # Rename the old covars, deviance and variable number
-  old_covars <- new_covars
-  old_deviance <- new_deviance
-  old_varNum <- new_varNum
-}
-
-colnames(df) <- c("Variables", "DevDiff", "VarNum", "Lambda")
-df
-
-# If two variables added at once, combine names together (else impossible to read on plot)
-df$Variables[df$Variables == "age_f7"] <- "covars"
-df
-
-df <- df[df$Variables != "male", ]
-df <- df[df$Variables != "white", ]
-df <- df[df$Variables != "deprived", ]
-df
-
-# Make a var to show number of steps where variables added
-df$steps <- 1:nrow(df)
+# First, use the 'lasso-table' function defined above to pick out the changes in variables and the increment in deviance ratio
+df <- lasso_table(mod_dist_dep_diaBP)
 df
 
 
@@ -3841,7 +3147,7 @@ coef(mod.cv, s = mod.cv$lambda.1se)
 coef(mod.cv, s = mod.cv$lambda.min)
 
 
-### All methods match up relatively well, and indicate little association between distance to green space in childhood and systolic blood pressure at age 7 (when controlling for ethnicity and household deprivation), although potentially increase in average distance to green space (accumulation) linked to lower systolic BP.
+### All methods match up relatively well, and indicate little association between distance to green space in childhood and diastolic blood pressure at age 7 (when controlling for ethnicity and household deprivation).
 
 
 
@@ -3922,6 +3228,22 @@ x_hypos <- data_dist_inc_bmi %>%
 x_hypos <- as.matrix(x_hypos)
 
 
+## Check correlation matrix of all these hypotheses (>0.9 would be a cause for concern)
+dim(x_hypos)
+cor(x_hypos[,5:16])
+cor(x_hypos[,5:16]) > 0.9
+cor(x_hypos[,5:16]) > 0.95
+
+# Biggest issues are with the accumulation variables, which are highly correlated with the critical period variables, so will drop these accumulation variables from these analysis due to collinearity and effectively measuring the same thing.
+x_hypos <- x_hypos[,!colnames(x_hypos) %in% c("accumulation", "int_accum")]
+head(x_hypos)
+
+dim(x_hypos)
+cor(x_hypos[,5:14])
+cor(x_hypos[,5:14]) > 0.9
+cor(x_hypos[,5:14]) > 0.95
+
+
 ## Run the Lasso model using GLMNET. alpha = 1 specifies L1 regularisation (lasso model), and the penalty factor option gives covariates (income, age, sex and white) weightings of '0', so are always included in the model (default is 1)
 mod_dist_inc_bmi <- glmnet(x_hypos, data_dist_inc_bmi$BMI_f7, 
                              alpha = 1, penalty.factor = (c(0, 0, 0, 0, rep(1, ncol(x_hypos) - 4))))
@@ -3944,51 +3266,8 @@ coef(mod_dist_inc_bmi, s = max(mod_dist_inc_bmi$lambda[mod_dist_inc_bmi$df == 7]
 
 ### Visual inspection of results (although just looking at the deviance ratios there doesn't seem to be much of an effect of access to green space at all)
 
-# First, make a loop to pick out the changes in variables and the increment in deviance ratio
-old_covars <- ""
-old_deviance <- 0
-old_varNum <- 0
-old_lambda <- NA
-df <- data.frame(matrix(ncol = 4, nrow = 0))
-df
-
-for (i in 1:length(mod_dist_inc_bmi$df)) {
-  #print(i)
-  new_covars <- attributes(which(mod_dist_inc_bmi$beta[, i] != 0))$names
-  new_deviance <- mod_dist_inc_bmi$dev.ratio[i]
-  new_varNum <- mod_dist_inc_bmi$df[i]
-  new_lambda <- mod_dist_inc_bmi$lambda[i]
-  #print(new_covars); print(new_deviance); print(new_varNum)
-  
-  # See if new covars different to old covars
-  if (new_varNum != old_varNum) {
-    new_addition <- setdiff(new_covars, old_covars) # Find the new covariate that's been added
-    dev_diff <- (new_deviance - old_deviance) * 100 # Diff in deviance value between current and previous lambda value
-    dev_diff <- round(dev_diff, 3)
-    temp <- cbind(new_addition, dev_diff, new_varNum, new_lambda) # Merge with template data frame
-    df <- rbind(df, temp)
-  }
-  
-  # Rename the old covars, deviance and variable number
-  old_covars <- new_covars
-  old_deviance <- new_deviance
-  old_varNum <- new_varNum
-}
-
-colnames(df) <- c("Variables", "DevDiff", "VarNum", "Lambda")
-df
-
-# If two variables added at once, combine names together (else impossible to read on plot)
-df$Variables[df$Variables == "age_f7"] <- "covars"
-df
-
-df <- df[df$Variables != "male", ]
-df <- df[df$Variables != "white", ]
-df <- df[df$Variables != "lowIncome", ]
-df
-
-# Make a var to show number of steps where variables added
-df$steps <- 1:nrow(df)
+# First, use the 'lasso-table' function defined above to pick out the changes in variables and the increment in deviance ratio
+df <- lasso_table(mod_dist_inc_bmi)
 df
 
 
@@ -4042,7 +3321,7 @@ mod.cv
 # Plot the log lambda by MSE to show both 'optimal' and '1SE' models (number of parameters is at the top of the plot)
 plot(mod.cv) 
 
-# Parameters in the 1SE and 'optimal' models - Both just contains just the 4 parameters included by default (age, sex, ethnicity and education), suggesting no association with distance to green space exposure
+# Parameters in the 1SE and 'optimal' models - The 1SE model just contains just the 4 parameters included by default (age, sex, ethnicity and education), suggesting no association with distance to green space exposure; while the minimum MSE model also contains crit2, the difference in MSE is practically nil.
 coef(mod.cv, s = mod.cv$lambda.1se)
 coef(mod.cv, s = mod.cv$lambda.min)
 
@@ -4066,6 +3345,10 @@ x_hypos <- data_dist_inc_overweight %>%
 
 x_hypos <- as.matrix(x_hypos)
 
+## Remove the accumulation variables (as high collinearity with critical period hypotheses)
+x_hypos <- x_hypos[,!colnames(x_hypos) %in% c("accumulation", "int_accum")]
+head(x_hypos)
+
 
 ## Run the Lasso model using GLMNET. alpha = 1 specifies L1 regularisation (lasso model), and the penalty factor option gives covariates (edu, age, sex and white) weightings of '0', so are always included in the model (default is 1)
 mod_dist_inc_over <- glmnet(x_hypos, data_dist_inc_overweight$overweight, family = "binomial",
@@ -4087,51 +3370,8 @@ coef(mod_dist_inc_over, s = max(mod_dist_inc_over$lambda[mod_dist_inc_over$df ==
 
 ### Visual inspection of results (although just looking at the deviance ratios there doesn't seem to be much of an effect of access to green space at all)
 
-# First, make a loop to pick out the changes in variables and the increment in deviance ratio
-old_covars <- ""
-old_deviance <- 0
-old_varNum <- 0
-old_lambda <- NA
-df <- data.frame(matrix(ncol = 4, nrow = 0))
-df
-
-for (i in 1:length(mod_dist_inc_over$df)) {
-  #print(i)
-  new_covars <- attributes(which(mod_dist_inc_over$beta[, i] != 0))$names
-  new_deviance <- mod_dist_inc_over$dev.ratio[i]
-  new_varNum <- mod_dist_inc_over$df[i]
-  new_lambda <- mod_dist_inc_over$lambda[i]
-  #print(new_covars); print(new_deviance); print(new_varNum)
-  
-  # See if new covars different to old covars
-  if (new_varNum != old_varNum) {
-    new_addition <- setdiff(new_covars, old_covars) # Find the new covariate that's been added
-    dev_diff <- (new_deviance - old_deviance) * 100 # Diff in deviance value between current and previous lambda value
-    dev_diff <- round(dev_diff, 3)
-    temp <- cbind(new_addition, dev_diff, new_varNum, new_lambda) # Merge with template data frame
-    df <- rbind(df, temp)
-  }
-  
-  # Rename the old covars, deviance and variable number
-  old_covars <- new_covars
-  old_deviance <- new_deviance
-  old_varNum <- new_varNum
-}
-
-colnames(df) <- c("Variables", "DevDiff", "VarNum", "Lambda")
-df
-
-# If two variables added at once, combine names together (else impossible to read on plot)
-df$Variables[df$Variables == "age_f7"] <- "covars"
-df
-
-df <- df[df$Variables != "male", ]
-df <- df[df$Variables != "white", ]
-df <- df[df$Variables != "lowIncome", ]
-df
-
-# Make a var to show number of steps where variables added
-df$steps <- 1:nrow(df)
+# First, use the 'lasso-table' function defined above to pick out the changes in variables and the increment in deviance ratio
+df <- lasso_table(mod_dist_inc_over)
 df
 
 
@@ -4212,6 +3452,10 @@ x_hypos <- data_dist_inc_sysBP %>%
 
 x_hypos <- as.matrix(x_hypos)
 
+## Remove the accumulation variables (as high collinearity with critical period hypotheses)
+x_hypos <- x_hypos[,!colnames(x_hypos) %in% c("accumulation", "int_accum")]
+head(x_hypos)
+
 
 ## Run the Lasso model using GLMNET. alpha = 1 specifies L1 regularisation (lasso model), and the penalty factor option gives covariates (income, age, sex and white) weightings of '0', so are always included in the model (default is 1)
 mod_dist_inc_sysBP <- glmnet(x_hypos, data_dist_inc_sysBP$sysBP,
@@ -4226,62 +3470,17 @@ plot(mod_dist_inc_sysBP)
 # Look at the variables included at each step
 coef(mod_dist_inc_sysBP, s = max(mod_dist_inc_sysBP$lambda[mod_dist_inc_sysBP$df == 4])); min(mod_dist_inc_sysBP$dev.ratio[mod_dist_inc_sysBP$df == 4])
 
+coef(mod_dist_inc_sysBP, s = max(mod_dist_inc_sysBP$lambda[mod_dist_inc_sysBP$df == 5])); min(mod_dist_inc_sysBP$dev.ratio[mod_dist_inc_sysBP$df == 5])
+
 coef(mod_dist_inc_sysBP, s = max(mod_dist_inc_sysBP$lambda[mod_dist_inc_sysBP$df == 6])); min(mod_dist_inc_sysBP$dev.ratio[mod_dist_inc_sysBP$df == 6])
 
 coef(mod_dist_inc_sysBP, s = max(mod_dist_inc_sysBP$lambda[mod_dist_inc_sysBP$df == 7])); min(mod_dist_inc_sysBP$dev.ratio[mod_dist_inc_sysBP$df == 7])
 
-coef(mod_dist_inc_sysBP, s = max(mod_dist_inc_sysBP$lambda[mod_dist_inc_sysBP$df == 8])); min(mod_dist_inc_sysBP$dev.ratio[mod_dist_inc_sysBP$df == 8])
-
 
 ### Visual inspection of results (although just looking at the deviance ratios there doesn't seem to be much of an effect of access to green space at all)
 
-# First, make a loop to pick out the changes in variables and the increment in deviance ratio
-old_covars <- ""
-old_deviance <- 0
-old_varNum <- 0
-old_lambda <- NA
-df <- data.frame(matrix(ncol = 4, nrow = 0))
-df
-
-for (i in 1:length(mod_dist_inc_sysBP$df)) {
-  #print(i)
-  new_covars <- attributes(which(mod_dist_inc_sysBP$beta[, i] != 0))$names
-  new_deviance <- mod_dist_inc_sysBP$dev.ratio[i]
-  new_varNum <- mod_dist_inc_sysBP$df[i]
-  new_lambda <- mod_dist_inc_sysBP$lambda[i]
-  #print(new_covars); print(new_deviance); print(new_varNum)
-  
-  # See if new covars different to old covars
-  if (new_varNum != old_varNum) {
-    new_addition <- setdiff(new_covars, old_covars) # Find the new covariate that's been added
-    dev_diff <- (new_deviance - old_deviance) * 100 # Diff in deviance value between current and previous lambda value
-    dev_diff <- round(dev_diff, 3)
-    temp <- cbind(new_addition, dev_diff, new_varNum, new_lambda) # Merge with template data frame
-    df <- rbind(df, temp)
-  }
-  
-  # Rename the old covars, deviance and variable number
-  old_covars <- new_covars
-  old_deviance <- new_deviance
-  old_varNum <- new_varNum
-}
-
-colnames(df) <- c("Variables", "DevDiff", "VarNum", "Lambda")
-df
-
-# If two variables added at once, combine names together (else impossible to read on plot)
-df$Variables[df$Variables == "age_f7"] <- "covars"
-df$Variables[df$Variables == "crit2"] <- "crit2/accumulation"
-df
-
-df <- df[df$Variables != "male", ]
-df <- df[df$Variables != "white", ]
-df <- df[df$Variables != "lowIncome", ]
-df <- df[df$Variables != "accumulation", ]
-df
-
-# Make a var to show number of steps where variables added
-df$steps <- 1:nrow(df)
+# First, use the 'lasso-table' function defined above to pick out the changes in variables and the increment in deviance ratio
+df <- lasso_table(mod_dist_inc_sysBP)
 df
 
 
@@ -4314,14 +3513,13 @@ text(df$log_lambda, 0.004, labels = df$Variables, srt = 90, adj = 0)
 dev.off()
 
 
-## From these results, would seem to be that not much is really going on here (although potentially v. weak effect of crit2/accumulation) - Will do a likelihood ratio test to see whether inclusion of first parameter(s) added (crit2 and accumulation) increases model fit of standard linear regression model
+## From these results, would seem to be that not much is really going on here (although potentially v. weak effect of crit2) - Will do a likelihood ratio test to see whether inclusion of first parameter(s) added (crit2 and accumulation) increases model fit of standard linear regression model
 base_mod <- lm(data_dist_inc_sysBP$sysBP ~ x_hypos[, "age_f7"] + x_hypos[, "male"] + x_hypos[, "white"] + 
                  x_hypos[, "lowIncome"])
 summary(base_mod)
 
 param1_mod <- lm(data_dist_inc_sysBP$sysBP ~ x_hypos[, "age_f7"] + x_hypos[, "male"] + 
-                   x_hypos[, "white"] + x_hypos[, "lowIncome"] + x_hypos[, "crit2"] + 
-                   x_hypos[, "accumulation"])
+                   x_hypos[, "white"] + x_hypos[, "lowIncome"] + x_hypos[, "crit2"])
 summary(param1_mod)
 
 # No real association here
@@ -4360,6 +3558,10 @@ x_hypos <- data_dist_inc_diaBP %>%
 
 x_hypos <- as.matrix(x_hypos)
 
+## Remove the accumulation variables (as high collinearity with critical period hypotheses)
+x_hypos <- x_hypos[,!colnames(x_hypos) %in% c("accumulation", "int_accum")]
+head(x_hypos)
+
 
 ## Run the Lasso model using GLMNET. alpha = 1 specifies L1 regularisation (lasso model), and the penalty factor option gives covariates (income, age, sex and white) weightings of '0', so are always included in the model (default is 1)
 mod_dist_inc_diaBP <- glmnet(x_hypos, data_dist_inc_diaBP$diaBP,
@@ -4383,51 +3585,8 @@ coef(mod_dist_inc_diaBP, s = max(mod_dist_inc_diaBP$lambda[mod_dist_inc_diaBP$df
 
 ### Visual inspection of results (although just looking at the deviance ratios there doesn't seem to be much of an effect of access to green space at all)
 
-# First, make a loop to pick out the changes in variables and the increment in deviance ratio
-old_covars <- ""
-old_deviance <- 0
-old_varNum <- 0
-old_lambda <- NA
-df <- data.frame(matrix(ncol = 4, nrow = 0))
-df
-
-for (i in 1:length(mod_dist_inc_diaBP$df)) {
-  #print(i)
-  new_covars <- attributes(which(mod_dist_inc_diaBP$beta[, i] != 0))$names
-  new_deviance <- mod_dist_inc_diaBP$dev.ratio[i]
-  new_varNum <- mod_dist_inc_diaBP$df[i]
-  new_lambda <- mod_dist_inc_diaBP$lambda[i]
-  #print(new_covars); print(new_deviance); print(new_varNum)
-  
-  # See if new covars different to old covars
-  if (new_varNum != old_varNum) {
-    new_addition <- setdiff(new_covars, old_covars) # Find the new covariate that's been added
-    dev_diff <- (new_deviance - old_deviance) * 100 # Diff in deviance value between current and previous lambda value
-    dev_diff <- round(dev_diff, 3)
-    temp <- cbind(new_addition, dev_diff, new_varNum, new_lambda) # Merge with template data frame
-    df <- rbind(df, temp)
-  }
-  
-  # Rename the old covars, deviance and variable number
-  old_covars <- new_covars
-  old_deviance <- new_deviance
-  old_varNum <- new_varNum
-}
-
-colnames(df) <- c("Variables", "DevDiff", "VarNum", "Lambda")
-df
-
-# If two variables added at once, combine names together (else impossible to read on plot)
-df$Variables[df$Variables == "age_f7"] <- "covars"
-df
-
-df <- df[df$Variables != "male", ]
-df <- df[df$Variables != "white", ]
-df <- df[df$Variables != "lowIncome", ]
-df
-
-# Make a var to show number of steps where variables added
-df$steps <- 1:nrow(df)
+# First, use the 'lasso-table' function defined above to pick out the changes in variables and the increment in deviance ratio
+df <- lasso_table(mod_dist_inc_diaBP)
 df
 
 
@@ -4572,6 +3731,22 @@ x_hypos <- data_ndvi_edu_bmi %>%
 x_hypos <- as.matrix(x_hypos)
 
 
+## Check correlation matrix of all these hypotheses (>0.9 would be a cause for concern)
+dim(x_hypos)
+cor(x_hypos[,5:16])
+cor(x_hypos[,5:16]) > 0.9
+cor(x_hypos[,5:16]) > 0.95
+
+# Biggest issues are with the accumulation variables, which are highly correlated with the critical period variables, so will drop these accumulation variables from these analysis due to collinearity and effectively measuring the same thing.
+x_hypos <- x_hypos[,!colnames(x_hypos) %in% c("accumulation", "int_accum")]
+head(x_hypos)
+
+dim(x_hypos)
+cor(x_hypos[,5:14])
+cor(x_hypos[,5:14]) > 0.9
+cor(x_hypos[,5:14]) > 0.95
+
+
 ## Run the Lasso model using GLMNET. alpha = 1 specifies L1 regularisation (lasso model), and the penalty factor option gives covariates (edu, age, sex and white) weightings of '0', so are always included in the model (default is 1)
 mod_ndvi_edu_bmi <- glmnet(x_hypos, data_ndvi_edu_bmi$BMI_f7, 
                            alpha = 1, penalty.factor = (c(0, 0, 0, 0, rep(1, ncol(x_hypos) - 4))))
@@ -4594,53 +3769,8 @@ coef(mod_ndvi_edu_bmi, s = max(mod_ndvi_edu_bmi$lambda[mod_ndvi_edu_bmi$df == 7]
 
 ### Visual inspection of results (although just looking at the deviance ratios there doesn't seem to be much of an effect of access to green space at all)
 
-# First, make a loop to pick out the changes in variables and the increment in deviance ratio
-old_covars <- ""
-old_deviance <- 0
-old_varNum <- 0
-old_lambda <- NA
-df <- data.frame(matrix(ncol = 4, nrow = 0))
-df
-
-for (i in 1:length(mod_ndvi_edu_bmi$df)) {
-  #print(i)
-  new_covars <- attributes(which(mod_ndvi_edu_bmi$beta[, i] != 0))$names
-  new_deviance <- mod_ndvi_edu_bmi$dev.ratio[i]
-  new_varNum <- mod_ndvi_edu_bmi$df[i]
-  new_lambda <- mod_ndvi_edu_bmi$lambda[i]
-  #print(new_covars); print(new_deviance); print(new_varNum)
-  
-  # See if new covars different to old covars
-  if (new_varNum != old_varNum) {
-    new_addition <- setdiff(new_covars, old_covars) # Find the new covariate that's been added
-    dev_diff <- (new_deviance - old_deviance) * 100 # Diff in deviance value between current and previous lambda value
-    dev_diff <- round(dev_diff, 3)
-    temp <- cbind(new_addition, dev_diff, new_varNum, new_lambda) # Merge with template data frame
-    df <- rbind(df, temp)
-  }
-  
-  # Rename the old covars, deviance and variable number
-  old_covars <- new_covars
-  old_deviance <- new_deviance
-  old_varNum <- new_varNum
-}
-
-colnames(df) <- c("Variables", "DevDiff", "VarNum", "Lambda")
-df
-
-# If two variables added at once, combine names together (else impossible to read on plot)
-df$Variables[df$Variables == "age_f7"] <- "covars"
-df$Variables[df$Variables == "green_ch12"] <- "green_ch12/green_ch23"
-df
-
-df <- df[df$Variables != "male", ]
-df <- df[df$Variables != "white", ]
-df <- df[df$Variables != "edu", ]
-df <- df[df$Variables != "green_ch23", ]
-df
-
-# Make a var to show number of steps where variables added
-df$steps <- 1:nrow(df)
+# First, use the 'lasso-table' function defined above to pick out the changes in variables and the increment in deviance ratio
+df <- lasso_table(mod_ndvi_edu_bmi)
 df
 
 
@@ -4718,6 +3848,10 @@ x_hypos <- data_ndvi_edu_overweight %>%
 
 x_hypos <- as.matrix(x_hypos)
 
+## Remove the accumulation variables (as high collinearity with critical period hypotheses)
+x_hypos <- x_hypos[,!colnames(x_hypos) %in% c("accumulation", "int_accum")]
+head(x_hypos)
+
 
 ## Run the Lasso model using GLMNET. alpha = 1 specifies L1 regularisation (lasso model), and the penalty factor option gives covariates (edu, age, sex and white) weightings of '0', so are always included in the model (default is 1)
 mod_ndvi_edu_over <- glmnet(x_hypos, data_ndvi_edu_overweight$overweight, family = "binomial",
@@ -4741,53 +3875,8 @@ coef(mod_ndvi_edu_over, s = max(mod_ndvi_edu_over$lambda[mod_ndvi_edu_over$df ==
 
 ### Visual inspection of results (although just looking at the deviance ratios there doesn't seem to be much of an effect of access to green space at all)
 
-# First, make a loop to pick out the changes in variables and the increment in deviance ratio
-old_covars <- ""
-old_deviance <- 0
-old_varNum <- 0
-old_lambda <- NA
-df <- data.frame(matrix(ncol = 4, nrow = 0))
-df
-
-for (i in 1:length(mod_ndvi_edu_over$df)) {
-  #print(i)
-  new_covars <- attributes(which(mod_ndvi_edu_over$beta[, i] != 0))$names
-  new_deviance <- mod_ndvi_edu_over$dev.ratio[i]
-  new_varNum <- mod_ndvi_edu_over$df[i]
-  new_lambda <- mod_ndvi_edu_over$lambda[i]
-  #print(new_covars); print(new_deviance); print(new_varNum)
-  
-  # See if new covars different to old covars
-  if (new_varNum != old_varNum) {
-    new_addition <- setdiff(new_covars, old_covars) # Find the new covariate that's been added
-    dev_diff <- (new_deviance - old_deviance) * 100 # Diff in deviance value between current and previous lambda value
-    dev_diff <- round(dev_diff, 3)
-    temp <- cbind(new_addition, dev_diff, new_varNum, new_lambda) # Merge with template data frame
-    df <- rbind(df, temp)
-  }
-  
-  # Rename the old covars, deviance and variable number
-  old_covars <- new_covars
-  old_deviance <- new_deviance
-  old_varNum <- new_varNum
-}
-
-colnames(df) <- c("Variables", "DevDiff", "VarNum", "Lambda")
-df
-
-# If two variables added at once, combine names together (else impossible to read on plot)
-df$Variables[df$Variables == "age_f7"] <- "covars"
-df$Variables[df$Variables == "int2"] <- "int2/int3"
-df
-
-df <- df[df$Variables != "male", ]
-df <- df[df$Variables != "white", ]
-df <- df[df$Variables != "edu", ]
-df <- df[df$Variables != "int3", ]
-df
-
-# Make a var to show number of steps where variables added
-df$steps <- 1:nrow(df)
+# First, use the 'lasso-table' function defined above to pick out the changes in variables and the increment in deviance ratio
+df <- lasso_table(mod_ndvi_edu_over)
 df
 
 
@@ -4865,6 +3954,10 @@ x_hypos <- data_ndvi_edu_sysBP %>%
 
 x_hypos <- as.matrix(x_hypos)
 
+## Remove the accumulation variables (as high collinearity with critical period hypotheses)
+x_hypos <- x_hypos[,!colnames(x_hypos) %in% c("accumulation", "int_accum")]
+head(x_hypos)
+
 
 ## Run the Lasso model using GLMNET. alpha = 1 specifies L1 regularisation (lasso model), and the penalty factor option gives covariates (edu, age, sex and white) weightings of '0', so are always included in the model (default is 1)
 mod_ndvi_edu_sysBP <- glmnet(x_hypos, data_ndvi_edu_sysBP$sysBP,
@@ -4888,53 +3981,8 @@ coef(mod_ndvi_edu_sysBP, s = max(mod_ndvi_edu_sysBP$lambda[mod_ndvi_edu_sysBP$df
 
 ### Visual inspection of results (although just looking at the deviance ratios there doesn't seem to be much of an effect of access to green space at all)
 
-# First, make a loop to pick out the changes in variables and the increment in deviance ratio
-old_covars <- ""
-old_deviance <- 0
-old_varNum <- 0
-old_lambda <- NA
-df <- data.frame(matrix(ncol = 4, nrow = 0))
-df
-
-for (i in 1:length(mod_ndvi_edu_sysBP$df)) {
-  #print(i)
-  new_covars <- attributes(which(mod_ndvi_edu_sysBP$beta[, i] != 0))$names
-  new_deviance <- mod_ndvi_edu_sysBP$dev.ratio[i]
-  new_varNum <- mod_ndvi_edu_sysBP$df[i]
-  new_lambda <- mod_ndvi_edu_sysBP$lambda[i]
-  #print(new_covars); print(new_deviance); print(new_varNum)
-  
-  # See if new covars different to old covars
-  if (new_varNum != old_varNum) {
-    new_addition <- setdiff(new_covars, old_covars) # Find the new covariate that's been added
-    dev_diff <- (new_deviance - old_deviance) * 100 # Diff in deviance value between current and previous lambda value
-    dev_diff <- round(dev_diff, 3)
-    temp <- cbind(new_addition, dev_diff, new_varNum, new_lambda) # Merge with template data frame
-    df <- rbind(df, temp)
-  }
-  
-  # Rename the old covars, deviance and variable number
-  old_covars <- new_covars
-  old_deviance <- new_deviance
-  old_varNum <- new_varNum
-}
-
-colnames(df) <- c("Variables", "DevDiff", "VarNum", "Lambda")
-df
-
-# If two variables added at once, combine names together (else impossible to read on plot)
-df$Variables[df$Variables == "age_f7"] <- "covars"
-df$Variables[df$Variables == "green_ch12_int"] <- "green_ch12_int/green_ch23"
-df
-
-df <- df[df$Variables != "male", ]
-df <- df[df$Variables != "white", ]
-df <- df[df$Variables != "edu", ]
-df <- df[df$Variables != "green_ch23", ]
-df
-
-# Make a var to show number of steps where variables added
-df$steps <- 1:nrow(df)
+# First, use the 'lasso-table' function defined above to pick out the changes in variables and the increment in deviance ratio
+df <- lasso_table(mod_ndvi_edu_sysBP)
 df
 
 
@@ -5012,6 +4060,10 @@ x_hypos <- data_ndvi_edu_diaBP %>%
 
 x_hypos <- as.matrix(x_hypos)
 
+## Remove the accumulation variables (as high collinearity with critical period hypotheses)
+x_hypos <- x_hypos[,!colnames(x_hypos) %in% c("accumulation", "int_accum")]
+head(x_hypos)
+
 
 ## Run the Lasso model using GLMNET. alpha = 1 specifies L1 regularisation (lasso model), and the penalty factor option gives covariates (edu, age, sex and white) weightings of '0', so are always included in the model (default is 1)
 mod_ndvi_edu_diaBP <- glmnet(x_hypos, data_ndvi_edu_diaBP$diaBP,
@@ -5035,53 +4087,8 @@ coef(mod_ndvi_edu_diaBP, s = max(mod_ndvi_edu_diaBP$lambda[mod_ndvi_edu_diaBP$df
 
 ### Visual inspection of results (although just looking at the deviance ratios there doesn't seem to be much of an effect of access to green space at all)
 
-# First, make a loop to pick out the changes in variables and the increment in deviance ratio
-old_covars <- ""
-old_deviance <- 0
-old_varNum <- 0
-old_lambda <- NA
-df <- data.frame(matrix(ncol = 4, nrow = 0))
-df
-
-for (i in 1:length(mod_ndvi_edu_diaBP$df)) {
-  #print(i)
-  new_covars <- attributes(which(mod_ndvi_edu_diaBP$beta[, i] != 0))$names
-  new_deviance <- mod_ndvi_edu_diaBP$dev.ratio[i]
-  new_varNum <- mod_ndvi_edu_diaBP$df[i]
-  new_lambda <- mod_ndvi_edu_diaBP$lambda[i]
-  #print(new_covars); print(new_deviance); print(new_varNum)
-  
-  # See if new covars different to old covars
-  if (new_varNum != old_varNum) {
-    new_addition <- setdiff(new_covars, old_covars) # Find the new covariate that's been added
-    dev_diff <- (new_deviance - old_deviance) * 100 # Diff in deviance value between current and previous lambda value
-    dev_diff <- round(dev_diff, 3)
-    temp <- cbind(new_addition, dev_diff, new_varNum, new_lambda) # Merge with template data frame
-    df <- rbind(df, temp)
-  }
-  
-  # Rename the old covars, deviance and variable number
-  old_covars <- new_covars
-  old_deviance <- new_deviance
-  old_varNum <- new_varNum
-}
-
-colnames(df) <- c("Variables", "DevDiff", "VarNum", "Lambda")
-df
-
-# If two variables added at once, combine names together (else impossible to read on plot)
-df$Variables[df$Variables == "age_f7"] <- "covars"
-df$Variables[df$Variables == "green_ch12_int"] <- "green_ch12_int/green_ch23"
-df
-
-df <- df[df$Variables != "male", ]
-df <- df[df$Variables != "white", ]
-df <- df[df$Variables != "edu", ]
-df <- df[df$Variables != "green_ch23", ]
-df
-
-# Make a var to show number of steps where variables added
-df$steps <- 1:nrow(df)
+# First, use the 'lasso-table' function defined above to pick out the changes in variables and the increment in deviance ratio
+df <- lasso_table(mod_ndvi_edu_diaBP)
 df
 
 
@@ -5220,6 +4227,22 @@ x_hypos <- data_ndvi_dep_bmi %>%
 x_hypos <- as.matrix(x_hypos)
 
 
+## Check correlation matrix of all these hypotheses (>0.9 would be a cause for concern)
+dim(x_hypos)
+cor(x_hypos[,5:16])
+cor(x_hypos[,5:16]) > 0.9
+cor(x_hypos[,5:16]) > 0.95
+
+# Biggest issues are with the accumulation variables, which are highly correlated with the critical period variables, so will drop these accumulation variables from these analysis due to collinearity and effectively measuring the same thing.
+x_hypos <- x_hypos[,!colnames(x_hypos) %in% c("accumulation", "int_accum")]
+head(x_hypos)
+
+dim(x_hypos)
+cor(x_hypos[,5:14])
+cor(x_hypos[,5:14]) > 0.9
+cor(x_hypos[,5:14]) > 0.95
+
+
 ## Run the Lasso model using GLMNET. alpha = 1 specifies L1 regularisation (lasso model), and the penalty factor option gives covariates (dep, age, sex and white) weightings of '0', so are always included in the model (default is 1)
 mod_ndvi_dep_bmi <- glmnet(x_hypos, data_ndvi_dep_bmi$BMI_f7, 
                            alpha = 1, penalty.factor = (c(0, 0, 0, 0, rep(1, ncol(x_hypos) - 4))))
@@ -5242,51 +4265,8 @@ coef(mod_ndvi_dep_bmi, s = max(mod_ndvi_dep_bmi$lambda[mod_ndvi_dep_bmi$df == 7]
 
 ### Visual inspection of results (although just looking at the deviance ratios there doesn't seem to be much of an effect of access to green space at all)
 
-# First, make a loop to pick out the changes in variables and the increment in deviance ratio
-old_covars <- ""
-old_deviance <- 0
-old_varNum <- 0
-old_lambda <- NA
-df <- data.frame(matrix(ncol = 4, nrow = 0))
-df
-
-for (i in 1:length(mod_ndvi_dep_bmi$df)) {
-  #print(i)
-  new_covars <- attributes(which(mod_ndvi_dep_bmi$beta[, i] != 0))$names
-  new_deviance <- mod_ndvi_dep_bmi$dev.ratio[i]
-  new_varNum <- mod_ndvi_dep_bmi$df[i]
-  new_lambda <- mod_ndvi_dep_bmi$lambda[i]
-  #print(new_covars); print(new_deviance); print(new_varNum)
-  
-  # See if new covars different to old covars
-  if (new_varNum != old_varNum) {
-    new_addition <- setdiff(new_covars, old_covars) # Find the new covariate that's been added
-    dev_diff <- (new_deviance - old_deviance) * 100 # Diff in deviance value between current and previous lambda value
-    dev_diff <- round(dev_diff, 3)
-    temp <- cbind(new_addition, dev_diff, new_varNum, new_lambda) # Merge with template data frame
-    df <- rbind(df, temp)
-  }
-  
-  # Rename the old covars, deviance and variable number
-  old_covars <- new_covars
-  old_deviance <- new_deviance
-  old_varNum <- new_varNum
-}
-
-colnames(df) <- c("Variables", "DevDiff", "VarNum", "Lambda")
-df
-
-# If two variables added at once, combine names together (else impossible to read on plot)
-df$Variables[df$Variables == "age_f7"] <- "covars"
-df
-
-df <- df[df$Variables != "male", ]
-df <- df[df$Variables != "white", ]
-df <- df[df$Variables != "deprived", ]
-df
-
-# Make a var to show number of steps where variables added
-df$steps <- 1:nrow(df)
+# First, use the 'lasso-table' function defined above to pick out the changes in variables and the increment in deviance ratio
+df <- lasso_table(mod_ndvi_dep_bmi)
 df
 
 
@@ -5340,7 +4320,7 @@ mod.cv
 # Plot the log lambda by MSE to show both 'optimal' and '1SE' models (number of parameters is at the top of the plot)
 plot(mod.cv) 
 
-# Parameters in the 1SE and 'optimal' models - Both just contains just the 4 parameters included by default (age, sex, ethnicity and education), suggesting no association with NDVI exposure
+# Parameters in the 1SE and 'optimal' models - The 1SE model just contains just the 4 parameters included by default (age, sex, ethnicity and education), suggesting no association with NDVI exposure; while the minimal MSE model also contains crit1, the improvement in MSE relative to the null model is practically nil.
 coef(mod.cv, s = mod.cv$lambda.1se)
 coef(mod.cv, s = mod.cv$lambda.min)
 
@@ -5363,6 +4343,10 @@ x_hypos <- data_ndvi_dep_overweight %>%
   select(-overweight)
 
 x_hypos <- as.matrix(x_hypos)
+
+## Remove the accumulation variables (as high collinearity with critical period hypotheses)
+x_hypos <- x_hypos[,!colnames(x_hypos) %in% c("accumulation", "int_accum")]
+head(x_hypos)
 
 
 ## Run the Lasso model using GLMNET. alpha = 1 specifies L1 regularisation (lasso model), and the penalty factor option gives covariates (edu, age, sex and white) weightings of '0', so are always included in the model (default is 1)
@@ -5387,51 +4371,8 @@ coef(mod_ndvi_dep_over, s = max(mod_ndvi_dep_over$lambda[mod_ndvi_dep_over$df ==
 
 ### Visual inspection of results (although just looking at the deviance ratios there doesn't seem to be much of an effect of access to green space at all)
 
-# First, make a loop to pick out the changes in variables and the increment in deviance ratio
-old_covars <- ""
-old_deviance <- 0
-old_varNum <- 0
-old_lambda <- NA
-df <- data.frame(matrix(ncol = 4, nrow = 0))
-df
-
-for (i in 1:length(mod_ndvi_dep_over$df)) {
-  #print(i)
-  new_covars <- attributes(which(mod_ndvi_dep_over$beta[, i] != 0))$names
-  new_deviance <- mod_ndvi_dep_over$dev.ratio[i]
-  new_varNum <- mod_ndvi_dep_over$df[i]
-  new_lambda <- mod_ndvi_dep_over$lambda[i]
-  #print(new_covars); print(new_deviance); print(new_varNum)
-  
-  # See if new covars different to old covars
-  if (new_varNum != old_varNum) {
-    new_addition <- setdiff(new_covars, old_covars) # Find the new covariate that's been added
-    dev_diff <- (new_deviance - old_deviance) * 100 # Diff in deviance value between current and previous lambda value
-    dev_diff <- round(dev_diff, 3)
-    temp <- cbind(new_addition, dev_diff, new_varNum, new_lambda) # Merge with template data frame
-    df <- rbind(df, temp)
-  }
-  
-  # Rename the old covars, deviance and variable number
-  old_covars <- new_covars
-  old_deviance <- new_deviance
-  old_varNum <- new_varNum
-}
-
-colnames(df) <- c("Variables", "DevDiff", "VarNum", "Lambda")
-df
-
-# If two variables added at once, combine names together (else impossible to read on plot)
-df$Variables[df$Variables == "age_f7"] <- "covars"
-df
-
-df <- df[df$Variables != "male", ]
-df <- df[df$Variables != "white", ]
-df <- df[df$Variables != "deprived", ]
-df
-
-# Make a var to show number of steps where variables added
-df$steps <- 1:nrow(df)
+# First, use the 'lasso-table' function defined above to pick out the changes in variables and the increment in deviance ratio
+df <- lasso_table(mod_ndvi_dep_over)
 df
 
 
@@ -5510,6 +4451,10 @@ x_hypos <- data_ndvi_dep_sysBP %>%
 
 x_hypos <- as.matrix(x_hypos)
 
+## Remove the accumulation variables (as high collinearity with critical period hypotheses)
+x_hypos <- x_hypos[,!colnames(x_hypos) %in% c("accumulation", "int_accum")]
+head(x_hypos)
+
 
 ## Run the Lasso model using GLMNET. alpha = 1 specifies L1 regularisation (lasso model), and the penalty factor option gives covariates (edu, age, sex and white) weightings of '0', so are always included in the model (default is 1)
 mod_ndvi_dep_sysBP <- glmnet(x_hypos, data_ndvi_dep_sysBP$sysBP,
@@ -5533,53 +4478,8 @@ coef(mod_ndvi_dep_sysBP, s = max(mod_ndvi_dep_sysBP$lambda[mod_ndvi_dep_sysBP$df
 
 ### Visual inspection of results (although just looking at the deviance ratios there doesn't seem to be much of an effect of access to green space at all)
 
-# First, make a loop to pick out the changes in variables and the increment in deviance ratio
-old_covars <- ""
-old_deviance <- 0
-old_varNum <- 0
-old_lambda <- NA
-df <- data.frame(matrix(ncol = 4, nrow = 0))
-df
-
-for (i in 1:length(mod_ndvi_dep_sysBP$df)) {
-  #print(i)
-  new_covars <- attributes(which(mod_ndvi_dep_sysBP$beta[, i] != 0))$names
-  new_deviance <- mod_ndvi_dep_sysBP$dev.ratio[i]
-  new_varNum <- mod_ndvi_dep_sysBP$df[i]
-  new_lambda <- mod_ndvi_dep_sysBP$lambda[i]
-  #print(new_covars); print(new_deviance); print(new_varNum)
-  
-  # See if new covars different to old covars
-  if (new_varNum != old_varNum) {
-    new_addition <- setdiff(new_covars, old_covars) # Find the new covariate that's been added
-    dev_diff <- (new_deviance - old_deviance) * 100 # Diff in deviance value between current and previous lambda value
-    dev_diff <- round(dev_diff, 3)
-    temp <- cbind(new_addition, dev_diff, new_varNum, new_lambda) # Merge with template data frame
-    df <- rbind(df, temp)
-  }
-  
-  # Rename the old covars, deviance and variable number
-  old_covars <- new_covars
-  old_deviance <- new_deviance
-  old_varNum <- new_varNum
-}
-
-colnames(df) <- c("Variables", "DevDiff", "VarNum", "Lambda")
-df
-
-# If two variables added at once, combine names together (else impossible to read on plot)
-df$Variables[df$Variables == "age_f7"] <- "covars"
-df$Variables[df$Variables == "int2"] <- "int2/int3"
-df
-
-df <- df[df$Variables != "male", ]
-df <- df[df$Variables != "white", ]
-df <- df[df$Variables != "deprived", ]
-df <- df[df$Variables != "int3", ]
-df
-
-# Make a var to show number of steps where variables added
-df$steps <- 1:nrow(df)
+# First, use the 'lasso-table' function defined above to pick out the changes in variables and the increment in deviance ratio
+df <- lasso_table(mod_ndvi_dep_sysBP)
 df
 
 
@@ -5621,7 +4521,7 @@ param1_mod <- lm(data_ndvi_dep_sysBP$sysBP ~ x_hypos[, "age_f7"] + x_hypos[, "ma
                    x_hypos[, "white"] + x_hypos[, "deprived"] + x_hypos[, "crit1"])
 summary(param1_mod)
 
-# Does seem to be a marginal association here, with an increase in NDVI (i.e., more green space) during pregnancy associated with lower systolic BP. However, given that the effect size is tiny and interpretation not clear (why would increasing NDVI be associated with lower BP?), this could just be the model hooking up to random noise.
+# Does seem to be a marginal association here, with an increase in NDVI (i.e., more green space) during pregnancy associated with higher systolic BP. However, given that the effect size is tiny and interpretation not clear (why would increasing NDVI be associated with higher BP?), this could just be the model hooking up to random noise.
 anova(base_mod, param1_mod)
 
 # Does adding the next parameter (green_ch23) improve model fit? No.
@@ -5640,7 +4540,7 @@ mod.cv
 # Plot the log lambda by MSE to show both 'optimal' and '1SE' models (number of parameters is at top of plot)
 plot(mod.cv) 
 
-# Parameters in the 1SE and 'optimal' models - The 1SE model is just the null/covariate-only model, while the 'optimal'/lowest MSE model also contains crit1 The difference in MSE is minimal, though, so not especially convincing. Suggests at best a very weak association with access to green space exposure
+# Parameters in the 1SE and 'optimal' models - The 1SE model is just the null/covariate-only model, while the 'optimal'/lowest MSE model also contains crit1. The difference in MSE is minimal, though, so not especially convincing. Suggests at best a very weak association with access to green space exposure
 coef(mod.cv, s = mod.cv$lambda.1se)
 coef(mod.cv, s = mod.cv$lambda.min)
 
@@ -5663,6 +4563,10 @@ x_hypos <- data_ndvi_dep_diaBP %>%
   select(-diaBP)
 
 x_hypos <- as.matrix(x_hypos)
+
+## Remove the accumulation variables (as high collinearity with critical period hypotheses)
+x_hypos <- x_hypos[,!colnames(x_hypos) %in% c("accumulation", "int_accum")]
+head(x_hypos)
 
 
 ## Run the Lasso model using GLMNET. alpha = 1 specifies L1 regularisation (lasso model), and the penalty factor option gives covariates (edu, age, sex and white) weightings of '0', so are always included in the model (default is 1)
@@ -5687,53 +4591,8 @@ coef(mod_ndvi_dep_diaBP, s = max(mod_ndvi_dep_diaBP$lambda[mod_ndvi_dep_diaBP$df
 
 ### Visual inspection of results (although just looking at the deviance ratios there doesn't seem to be much of an effect of access to green space at all)
 
-# First, make a loop to pick out the changes in variables and the increment in deviance ratio
-old_covars <- ""
-old_deviance <- 0
-old_varNum <- 0
-old_lambda <- NA
-df <- data.frame(matrix(ncol = 4, nrow = 0))
-df
-
-for (i in 1:length(mod_ndvi_dep_diaBP$df)) {
-  #print(i)
-  new_covars <- attributes(which(mod_ndvi_dep_diaBP$beta[, i] != 0))$names
-  new_deviance <- mod_ndvi_dep_diaBP$dev.ratio[i]
-  new_varNum <- mod_ndvi_dep_diaBP$df[i]
-  new_lambda <- mod_ndvi_dep_diaBP$lambda[i]
-  #print(new_covars); print(new_deviance); print(new_varNum)
-  
-  # See if new covars different to old covars
-  if (new_varNum != old_varNum) {
-    new_addition <- setdiff(new_covars, old_covars) # Find the new covariate that's been added
-    dev_diff <- (new_deviance - old_deviance) * 100 # Diff in deviance value between current and previous lambda value
-    dev_diff <- round(dev_diff, 3)
-    temp <- cbind(new_addition, dev_diff, new_varNum, new_lambda) # Merge with template data frame
-    df <- rbind(df, temp)
-  }
-  
-  # Rename the old covars, deviance and variable number
-  old_covars <- new_covars
-  old_deviance <- new_deviance
-  old_varNum <- new_varNum
-}
-
-colnames(df) <- c("Variables", "DevDiff", "VarNum", "Lambda")
-df
-
-# If two variables added at once, combine names together (else impossible to read on plot)
-df$Variables[df$Variables == "age_f7"] <- "covars"
-df$Variables[df$Variables == "crit1"] <- "crit1/int1"
-df
-
-df <- df[df$Variables != "male", ]
-df <- df[df$Variables != "white", ]
-df <- df[df$Variables != "deprived", ]
-df <- df[df$Variables != "int1", ]
-df
-
-# Make a var to show number of steps where variables added
-df$steps <- 1:nrow(df)
+# First, use the 'lasso-table' function defined above to pick out the changes in variables and the increment in deviance ratio
+df <- lasso_table(mod_ndvi_dep_diaBP)
 df
 
 
@@ -5873,6 +4732,22 @@ x_hypos <- data_ndvi_inc_bmi %>%
 x_hypos <- as.matrix(x_hypos)
 
 
+## Check correlation matrix of all these hypotheses (>0.9 would be a cause for concern)
+dim(x_hypos)
+cor(x_hypos[,5:16])
+cor(x_hypos[,5:16]) > 0.9
+cor(x_hypos[,5:16]) > 0.95
+
+# Biggest issues are with the accumulation variables, which are highly correlated with the critical period variables, so will drop these accumulation variables from these analysis due to collinearity and effectively measuring the same thing.
+x_hypos <- x_hypos[,!colnames(x_hypos) %in% c("accumulation", "int_accum")]
+head(x_hypos)
+
+dim(x_hypos)
+cor(x_hypos[,5:14])
+cor(x_hypos[,5:14]) > 0.9
+cor(x_hypos[,5:14]) > 0.95
+
+
 ## Run the Lasso model using GLMNET. alpha = 1 specifies L1 regularisation (lasso model), and the penalty factor option gives covariates (income, age, sex and white) weightings of '0', so are always included in the model (default is 1)
 mod_ndvi_inc_bmi <- glmnet(x_hypos, data_ndvi_inc_bmi$BMI_f7, 
                            alpha = 1, penalty.factor = (c(0, 0, 0, 0, rep(1, ncol(x_hypos) - 4))))
@@ -5895,53 +4770,8 @@ coef(mod_ndvi_inc_bmi, s = max(mod_ndvi_inc_bmi$lambda[mod_ndvi_inc_bmi$df == 7]
 
 ### Visual inspection of results (although just looking at the deviance ratios there doesn't seem to be much of an effect of access to green space at all)
 
-# First, make a loop to pick out the changes in variables and the increment in deviance ratio
-old_covars <- ""
-old_deviance <- 0
-old_varNum <- 0
-old_lambda <- NA
-df <- data.frame(matrix(ncol = 4, nrow = 0))
-df
-
-for (i in 1:length(mod_ndvi_inc_bmi$df)) {
-  #print(i)
-  new_covars <- attributes(which(mod_ndvi_inc_bmi$beta[, i] != 0))$names
-  new_deviance <- mod_ndvi_inc_bmi$dev.ratio[i]
-  new_varNum <- mod_ndvi_inc_bmi$df[i]
-  new_lambda <- mod_ndvi_inc_bmi$lambda[i]
-  #print(new_covars); print(new_deviance); print(new_varNum)
-  
-  # See if new covars different to old covars
-  if (new_varNum != old_varNum) {
-    new_addition <- setdiff(new_covars, old_covars) # Find the new covariate that's been added
-    dev_diff <- (new_deviance - old_deviance) * 100 # Diff in deviance value between current and previous lambda value
-    dev_diff <- round(dev_diff, 3)
-    temp <- cbind(new_addition, dev_diff, new_varNum, new_lambda) # Merge with template data frame
-    df <- rbind(df, temp)
-  }
-  
-  # Rename the old covars, deviance and variable number
-  old_covars <- new_covars
-  old_deviance <- new_deviance
-  old_varNum <- new_varNum
-}
-
-colnames(df) <- c("Variables", "DevDiff", "VarNum", "Lambda")
-df
-
-# If two variables added at once, combine names together (else impossible to read on plot)
-df$Variables[df$Variables == "age_f7"] <- "covars"
-df$Variables[df$Variables == "int2"] <- "int2/green_ch12_int"
-df
-
-df <- df[df$Variables != "male", ]
-df <- df[df$Variables != "white", ]
-df <- df[df$Variables != "lowIncome", ]
-df <- df[df$Variables != "green_ch12_int", ]
-df
-
-# Make a var to show number of steps where variables added
-df$steps <- 1:nrow(df)
+# First, use the 'lasso-table' function defined above to pick out the changes in variables and the increment in deviance ratio
+df <- lasso_table(mod_ndvi_inc_bmi)
 df
 
 
@@ -6019,6 +4849,10 @@ x_hypos <- data_ndvi_inc_overweight %>%
 
 x_hypos <- as.matrix(x_hypos)
 
+## Remove the accumulation variables (as high collinearity with critical period hypotheses)
+x_hypos <- x_hypos[,!colnames(x_hypos) %in% c("accumulation", "int_accum")]
+head(x_hypos)
+
 
 ## Run the Lasso model using GLMNET. alpha = 1 specifies L1 regularisation (lasso model), and the penalty factor option gives covariates (SEP, age, sex and white) weightings of '0', so are always included in the model (default is 1)
 mod_ndvi_inc_over <- glmnet(x_hypos, data_ndvi_inc_overweight$overweight, family = "binomial",
@@ -6042,53 +4876,8 @@ coef(mod_ndvi_inc_over, s = max(mod_ndvi_inc_over$lambda[mod_ndvi_inc_over$df ==
 
 ### Visual inspection of results (although just looking at the deviance ratios there doesn't seem to be much of an effect of access to green space at all)
 
-# First, make a loop to pick out the changes in variables and the increment in deviance ratio
-old_covars <- ""
-old_deviance <- 0
-old_varNum <- 0
-old_lambda <- NA
-df <- data.frame(matrix(ncol = 4, nrow = 0))
-df
-
-for (i in 1:length(mod_ndvi_inc_over$df)) {
-  #print(i)
-  new_covars <- attributes(which(mod_ndvi_inc_over$beta[, i] != 0))$names
-  new_deviance <- mod_ndvi_inc_over$dev.ratio[i]
-  new_varNum <- mod_ndvi_inc_over$df[i]
-  new_lambda <- mod_ndvi_inc_over$lambda[i]
-  #print(new_covars); print(new_deviance); print(new_varNum)
-  
-  # See if new covars different to old covars
-  if (new_varNum != old_varNum) {
-    new_addition <- setdiff(new_covars, old_covars) # Find the new covariate that's been added
-    dev_diff <- (new_deviance - old_deviance) * 100 # Diff in deviance value between current and previous lambda value
-    dev_diff <- round(dev_diff, 3)
-    temp <- cbind(new_addition, dev_diff, new_varNum, new_lambda) # Merge with template data frame
-    df <- rbind(df, temp)
-  }
-  
-  # Rename the old covars, deviance and variable number
-  old_covars <- new_covars
-  old_deviance <- new_deviance
-  old_varNum <- new_varNum
-}
-
-colnames(df) <- c("Variables", "DevDiff", "VarNum", "Lambda")
-df
-
-# If two variables added at once, combine names together (else impossible to read on plot)
-df$Variables[df$Variables == "age_f7"] <- "covars"
-df$Variables[df$Variables == "crit3"] <- "crit3/green_ch23_int"
-df
-
-df <- df[df$Variables != "male", ]
-df <- df[df$Variables != "white", ]
-df <- df[df$Variables != "lowIncome", ]
-df <- df[df$Variables != "green_ch23_int", ]
-df
-
-# Make a var to show number of steps where variables added
-df$steps <- 1:nrow(df)
+# First, use the 'lasso-table' function defined above to pick out the changes in variables and the increment in deviance ratio
+df <- lasso_table(mod_ndvi_inc_over)
 df
 
 
@@ -6169,6 +4958,10 @@ x_hypos <- data_ndvi_inc_sysBP %>%
 
 x_hypos <- as.matrix(x_hypos)
 
+## Remove the accumulation variables (as high collinearity with critical period hypotheses)
+x_hypos <- x_hypos[,!colnames(x_hypos) %in% c("accumulation", "int_accum")]
+head(x_hypos)
+
 
 ## Run the Lasso model using GLMNET. alpha = 1 specifies L1 regularisation (lasso model), and the penalty factor option gives covariates (income, age, sex and white) weightings of '0', so are always included in the model (default is 1)
 mod_ndvi_inc_sysBP <- glmnet(x_hypos, data_ndvi_inc_sysBP$sysBP,
@@ -6192,51 +4985,8 @@ coef(mod_ndvi_inc_sysBP, s = max(mod_ndvi_inc_sysBP$lambda[mod_ndvi_inc_sysBP$df
 
 ### Visual inspection of results (although just looking at the deviance ratios there doesn't seem to be much of an effect of access to green space at all)
 
-# First, make a loop to pick out the changes in variables and the increment in deviance ratio
-old_covars <- ""
-old_deviance <- 0
-old_varNum <- 0
-old_lambda <- NA
-df <- data.frame(matrix(ncol = 4, nrow = 0))
-df
-
-for (i in 1:length(mod_ndvi_inc_sysBP$df)) {
-  #print(i)
-  new_covars <- attributes(which(mod_ndvi_inc_sysBP$beta[, i] != 0))$names
-  new_deviance <- mod_ndvi_inc_sysBP$dev.ratio[i]
-  new_varNum <- mod_ndvi_inc_sysBP$df[i]
-  new_lambda <- mod_ndvi_inc_sysBP$lambda[i]
-  #print(new_covars); print(new_deviance); print(new_varNum)
-  
-  # See if new covars different to old covars
-  if (new_varNum != old_varNum) {
-    new_addition <- setdiff(new_covars, old_covars) # Find the new covariate that's been added
-    dev_diff <- (new_deviance - old_deviance) * 100 # Diff in deviance value between current and previous lambda value
-    dev_diff <- round(dev_diff, 3)
-    temp <- cbind(new_addition, dev_diff, new_varNum, new_lambda) # Merge with template data frame
-    df <- rbind(df, temp)
-  }
-  
-  # Rename the old covars, deviance and variable number
-  old_covars <- new_covars
-  old_deviance <- new_deviance
-  old_varNum <- new_varNum
-}
-
-colnames(df) <- c("Variables", "DevDiff", "VarNum", "Lambda")
-df
-
-# If two variables added at once, combine names together (else impossible to read on plot)
-df$Variables[df$Variables == "age_f7"] <- "covars"
-df
-
-df <- df[df$Variables != "male", ]
-df <- df[df$Variables != "white", ]
-df <- df[df$Variables != "lowIncome", ]
-df
-
-# Make a var to show number of steps where variables added
-df$steps <- 1:nrow(df)
+# First, use the 'lasso-table' function defined above to pick out the changes in variables and the increment in deviance ratio
+df <- lasso_table(mod_ndvi_inc_sysBP)
 df
 
 
@@ -6269,7 +5019,7 @@ text(df$log_lambda, 0.004, labels = df$Variables, srt = 90, adj = 0)
 dev.off()
 
 
-## From these results, would seem to be that not much is really going on here (although potentially v. weak effect of crit2/accumulation) - Will do a likelihood ratio test to see whether inclusion of first parameter(s) added (green_ch23_int) increases model fit of standard linear regression model
+## From these results, would seem to be that not much is really going on here - Will do a likelihood ratio test to see whether inclusion of first parameter(s) added (green_ch23_int) increases model fit of standard linear regression model
 base_mod <- lm(data_ndvi_inc_sysBP$sysBP ~ x_hypos[, "age_f7"] + x_hypos[, "male"] + x_hypos[, "white"] + 
                  x_hypos[, "lowIncome"])
 summary(base_mod)
@@ -6314,6 +5064,10 @@ x_hypos <- data_ndvi_inc_diaBP %>%
 
 x_hypos <- as.matrix(x_hypos)
 
+## Remove the accumulation variables (as high collinearity with critical period hypotheses)
+x_hypos <- x_hypos[,!colnames(x_hypos) %in% c("accumulation", "int_accum")]
+head(x_hypos)
+
 
 ## Run the Lasso model using GLMNET. alpha = 1 specifies L1 regularisation (lasso model), and the penalty factor option gives covariates (income, age, sex and white) weightings of '0', so are always included in the model (default is 1)
 mod_ndvi_inc_diaBP <- glmnet(x_hypos, data_ndvi_inc_diaBP$diaBP,
@@ -6337,51 +5091,8 @@ coef(mod_ndvi_inc_diaBP, s = max(mod_ndvi_inc_diaBP$lambda[mod_ndvi_inc_diaBP$df
 
 ### Visual inspection of results (although just looking at the deviance ratios there doesn't seem to be much of an effect of access to green space at all)
 
-# First, make a loop to pick out the changes in variables and the increment in deviance ratio
-old_covars <- ""
-old_deviance <- 0
-old_varNum <- 0
-old_lambda <- NA
-df <- data.frame(matrix(ncol = 4, nrow = 0))
-df
-
-for (i in 1:length(mod_ndvi_inc_diaBP$df)) {
-  #print(i)
-  new_covars <- attributes(which(mod_ndvi_inc_diaBP$beta[, i] != 0))$names
-  new_deviance <- mod_ndvi_inc_diaBP$dev.ratio[i]
-  new_varNum <- mod_ndvi_inc_diaBP$df[i]
-  new_lambda <- mod_ndvi_inc_diaBP$lambda[i]
-  #print(new_covars); print(new_deviance); print(new_varNum)
-  
-  # See if new covars different to old covars
-  if (new_varNum != old_varNum) {
-    new_addition <- setdiff(new_covars, old_covars) # Find the new covariate that's been added
-    dev_diff <- (new_deviance - old_deviance) * 100 # Diff in deviance value between current and previous lambda value
-    dev_diff <- round(dev_diff, 3)
-    temp <- cbind(new_addition, dev_diff, new_varNum, new_lambda) # Merge with template data frame
-    df <- rbind(df, temp)
-  }
-  
-  # Rename the old covars, deviance and variable number
-  old_covars <- new_covars
-  old_deviance <- new_deviance
-  old_varNum <- new_varNum
-}
-
-colnames(df) <- c("Variables", "DevDiff", "VarNum", "Lambda")
-df
-
-# If two variables added at once, combine names together (else impossible to read on plot)
-df$Variables[df$Variables == "age_f7"] <- "covars"
-df
-
-df <- df[df$Variables != "male", ]
-df <- df[df$Variables != "white", ]
-df <- df[df$Variables != "lowIncome", ]
-df
-
-# Make a var to show number of steps where variables added
-df$steps <- 1:nrow(df)
+# First, use the 'lasso-table' function defined above to pick out the changes in variables and the increment in deviance ratio
+df <- lasso_table(mod_ndvi_inc_diaBP)
 df
 
 
@@ -6414,13 +5125,13 @@ text(df$log_lambda, 0.004, labels = df$Variables, srt = 90, adj = 0)
 dev.off()
 
 
-## From these results, would seem to be that nothing is really going on here - Will do a likelihood ratio test to see whether inclusion of first parameter(s) added (accumulation) increases model fit of standard linear regression model
+## From these results, would seem to be that nothing is really going on here - Will do a likelihood ratio test to see whether inclusion of first parameter(s) added (crit1) increases model fit of standard linear regression model
 base_mod <- lm(data_ndvi_inc_diaBP$diaBP ~ x_hypos[, "age_f7"] + x_hypos[, "male"] + x_hypos[, "white"] + 
                  x_hypos[, "lowIncome"])
 summary(base_mod)
 
 param1_mod <- lm(data_ndvi_inc_diaBP$diaBP ~ x_hypos[, "age_f7"] + x_hypos[, "male"] + 
-                   x_hypos[, "white"] + x_hypos[, "lowIncome"] + x_hypos[, "accumulation"])
+                   x_hypos[, "white"] + x_hypos[, "lowIncome"] + x_hypos[, "crit1"])
 summary(param1_mod)
 
 # No association here.
@@ -6533,6 +5244,22 @@ x_hypos <- data_garden_edu_bmi %>%
 x_hypos <- as.matrix(x_hypos)
 
 
+## Check correlation matrix of all these hypotheses (>0.9 would be a cause for concern)
+dim(x_hypos)
+cor(x_hypos[,5:20])
+cor(x_hypos[,5:20]) > 0.9
+cor(x_hypos[,5:20]) > 0.95
+
+# Biggest issues are with the accumulation variables, which are highly correlated with the critical period variables, so will drop these accumulation variables from these analysis due to collinearity and effectively measuring the same thing. Unlike the other exposures, here the main issue is with the accumulation interaction, rather than the accumulation-only variable, so will just drop the interaction term here. The critical period interaction terms also have very high correlations with one another here (r > 0.95), but as each interaction term refers to a specific critical period, will just leave as is.
+x_hypos <- x_hypos[,!colnames(x_hypos) %in% c("int_accum")]
+head(x_hypos)
+
+dim(x_hypos)
+cor(x_hypos[,5:19])
+cor(x_hypos[,5:19]) > 0.9
+cor(x_hypos[,5:19]) > 0.95
+
+
 ## Run the Lasso model using GLMNET. alpha = 1 specifies L1 regularisation (lasso model), and the penalty factor option gives covariates (edu, age, sex and white) weightings of '0', so are always included in the model (default is 1)
 mod_garden_edu_bmi <- glmnet(x_hypos, data_garden_edu_bmi$BMI_f7, 
                            alpha = 1, penalty.factor = (c(0, 0, 0, 0, rep(1, ncol(x_hypos) - 4))))
@@ -6555,51 +5282,8 @@ coef(mod_garden_edu_bmi, s = max(mod_garden_edu_bmi$lambda[mod_garden_edu_bmi$df
 
 ### Visual inspection of results (although just looking at the deviance ratios there doesn't seem to be much of an effect of access to green space at all)
 
-# First, make a loop to pick out the changes in variables and the increment in deviance ratio
-old_covars <- ""
-old_deviance <- 0
-old_varNum <- 0
-old_lambda <- NA
-df <- data.frame(matrix(ncol = 4, nrow = 0))
-df
-
-for (i in 1:length(mod_garden_edu_bmi$df)) {
-  #print(i)
-  new_covars <- attributes(which(mod_garden_edu_bmi$beta[, i] != 0))$names
-  new_deviance <- mod_garden_edu_bmi$dev.ratio[i]
-  new_varNum <- mod_garden_edu_bmi$df[i]
-  new_lambda <- mod_garden_edu_bmi$lambda[i]
-  #print(new_covars); print(new_deviance); print(new_varNum)
-  
-  # See if new covars different to old covars
-  if (new_varNum != old_varNum) {
-    new_addition <- setdiff(new_covars, old_covars) # Find the new covariate that's been added
-    dev_diff <- (new_deviance - old_deviance) * 100 # Diff in deviance value between current and previous lambda value
-    dev_diff <- round(dev_diff, 3)
-    temp <- cbind(new_addition, dev_diff, new_varNum, new_lambda) # Merge with template data frame
-    df <- rbind(df, temp)
-  }
-  
-  # Rename the old covars, deviance and variable number
-  old_covars <- new_covars
-  old_deviance <- new_deviance
-  old_varNum <- new_varNum
-}
-
-colnames(df) <- c("Variables", "DevDiff", "VarNum", "Lambda")
-df
-
-# If two variables added at once, combine names together (else impossible to read on plot)
-df$Variables[df$Variables == "age_f7"] <- "covars"
-df
-
-df <- df[df$Variables != "male", ]
-df <- df[df$Variables != "white", ]
-df <- df[df$Variables != "edu", ]
-df
-
-# Make a var to show number of steps where variables added
-df$steps <- 1:nrow(df)
+# First, use the 'lasso-table' function defined above to pick out the changes in variables and the increment in deviance ratio
+df <- lasso_table(mod_garden_edu_bmi)
 df
 
 
@@ -6677,6 +5361,10 @@ x_hypos <- data_garden_edu_overweight %>%
 
 x_hypos <- as.matrix(x_hypos)
 
+## Remove the accumulation interaction variable (as high collinearity with critical period hypotheses)
+x_hypos <- x_hypos[,!colnames(x_hypos) %in% c("int_accum")]
+head(x_hypos)
+
 
 ## Run the Lasso model using GLMNET. alpha = 1 specifies L1 regularisation (lasso model), and the penalty factor option gives covariates (edu, age, sex and white) weightings of '0', so are always included in the model (default is 1)
 mod_garden_edu_over <- glmnet(x_hypos, data_garden_edu_overweight$overweight, family = "binomial",
@@ -6700,53 +5388,8 @@ coef(mod_garden_edu_over, s = max(mod_garden_edu_over$lambda[mod_garden_edu_over
 
 ### Visual inspection of results (although just looking at the deviance ratios there doesn't seem to be much of an effect of access to green space at all)
 
-# First, make a loop to pick out the changes in variables and the increment in deviance ratio
-old_covars <- ""
-old_deviance <- 0
-old_varNum <- 0
-old_lambda <- NA
-df <- data.frame(matrix(ncol = 4, nrow = 0))
-df
-
-for (i in 1:length(mod_garden_edu_over$df)) {
-  #print(i)
-  new_covars <- attributes(which(mod_garden_edu_over$beta[, i] != 0))$names
-  new_deviance <- mod_garden_edu_over$dev.ratio[i]
-  new_varNum <- mod_garden_edu_over$df[i]
-  new_lambda <- mod_garden_edu_over$lambda[i]
-  #print(new_covars); print(new_deviance); print(new_varNum)
-  
-  # See if new covars different to old covars
-  if (new_varNum != old_varNum) {
-    new_addition <- setdiff(new_covars, old_covars) # Find the new covariate that's been added
-    dev_diff <- (new_deviance - old_deviance) * 100 # Diff in deviance value between current and previous lambda value
-    dev_diff <- round(dev_diff, 3)
-    temp <- cbind(new_addition, dev_diff, new_varNum, new_lambda) # Merge with template data frame
-    df <- rbind(df, temp)
-  }
-  
-  # Rename the old covars, deviance and variable number
-  old_covars <- new_covars
-  old_deviance <- new_deviance
-  old_varNum <- new_varNum
-}
-
-colnames(df) <- c("Variables", "DevDiff", "VarNum", "Lambda")
-df
-
-# If two variables added at once, combine names together (else impossible to read on plot)
-df$Variables[df$Variables == "age_f7"] <- "covars"
-df$Variables[df$Variables == "crit1"] <- "crit1/green_dec12_int"
-df
-
-df <- df[df$Variables != "male", ]
-df <- df[df$Variables != "white", ]
-df <- df[df$Variables != "edu", ]
-df <- df[df$Variables != "green_dec12_int", ]
-df
-
-# Make a var to show number of steps where variables added
-df$steps <- 1:nrow(df)
+# First, use the 'lasso-table' function defined above to pick out the changes in variables and the increment in deviance ratio
+df <- lasso_table(mod_garden_edu_over)
 df
 
 
@@ -6824,6 +5467,10 @@ x_hypos <- data_garden_edu_sysBP %>%
 
 x_hypos <- as.matrix(x_hypos)
 
+## Remove the accumulation interaction variable (as high collinearity with critical period hypotheses)
+x_hypos <- x_hypos[,!colnames(x_hypos) %in% c("int_accum")]
+head(x_hypos)
+
 
 ## Run the Lasso model using GLMNET. alpha = 1 specifies L1 regularisation (lasso model), and the penalty factor option gives covariates (edu, age, sex and white) weightings of '0', so are always included in the model (default is 1)
 mod_garden_edu_sysBP <- glmnet(x_hypos, data_garden_edu_sysBP$sysBP,
@@ -6847,51 +5494,8 @@ coef(mod_garden_edu_sysBP, s = max(mod_garden_edu_sysBP$lambda[mod_garden_edu_sy
 
 ### Visual inspection of results (although just looking at the deviance ratios there doesn't seem to be much of an effect of access to green space at all)
 
-# First, make a loop to pick out the changes in variables and the increment in deviance ratio
-old_covars <- ""
-old_deviance <- 0
-old_varNum <- 0
-old_lambda <- NA
-df <- data.frame(matrix(ncol = 4, nrow = 0))
-df
-
-for (i in 1:length(mod_garden_edu_sysBP$df)) {
-  #print(i)
-  new_covars <- attributes(which(mod_garden_edu_sysBP$beta[, i] != 0))$names
-  new_deviance <- mod_garden_edu_sysBP$dev.ratio[i]
-  new_varNum <- mod_garden_edu_sysBP$df[i]
-  new_lambda <- mod_garden_edu_sysBP$lambda[i]
-  #print(new_covars); print(new_deviance); print(new_varNum)
-  
-  # See if new covars different to old covars
-  if (new_varNum != old_varNum) {
-    new_addition <- setdiff(new_covars, old_covars) # Find the new covariate that's been added
-    dev_diff <- (new_deviance - old_deviance) * 100 # Diff in deviance value between current and previous lambda value
-    dev_diff <- round(dev_diff, 3)
-    temp <- cbind(new_addition, dev_diff, new_varNum, new_lambda) # Merge with template data frame
-    df <- rbind(df, temp)
-  }
-  
-  # Rename the old covars, deviance and variable number
-  old_covars <- new_covars
-  old_deviance <- new_deviance
-  old_varNum <- new_varNum
-}
-
-colnames(df) <- c("Variables", "DevDiff", "VarNum", "Lambda")
-df
-
-# If two variables added at once, combine names together (else impossible to read on plot)
-df$Variables[df$Variables == "age_f7"] <- "covars"
-df
-
-df <- df[df$Variables != "male", ]
-df <- df[df$Variables != "white", ]
-df <- df[df$Variables != "edu", ]
-df
-
-# Make a var to show number of steps where variables added
-df$steps <- 1:nrow(df)
+# First, use the 'lasso-table' function defined above to pick out the changes in variables and the increment in deviance ratio
+df <- lasso_table(mod_garden_edu_sysBP)
 df
 
 
@@ -6969,6 +5573,10 @@ x_hypos <- data_garden_edu_diaBP %>%
 
 x_hypos <- as.matrix(x_hypos)
 
+## Remove the accumulation interaction variable (as high collinearity with critical period hypotheses)
+x_hypos <- x_hypos[,!colnames(x_hypos) %in% c("int_accum")]
+head(x_hypos)
+
 
 ## Run the Lasso model using GLMNET. alpha = 1 specifies L1 regularisation (lasso model), and the penalty factor option gives covariates (edu, age, sex and white) weightings of '0', so are always included in the model (default is 1)
 mod_garden_edu_diaBP <- glmnet(x_hypos, data_garden_edu_diaBP$diaBP,
@@ -6992,53 +5600,8 @@ coef(mod_garden_edu_diaBP, s = max(mod_garden_edu_diaBP$lambda[mod_garden_edu_di
 
 ### Visual inspection of results (although just looking at the deviance ratios there doesn't seem to be much of an effect of access to green space at all)
 
-# First, make a loop to pick out the changes in variables and the increment in deviance ratio
-old_covars <- ""
-old_deviance <- 0
-old_varNum <- 0
-old_lambda <- NA
-df <- data.frame(matrix(ncol = 4, nrow = 0))
-df
-
-for (i in 1:length(mod_garden_edu_diaBP$df)) {
-  #print(i)
-  new_covars <- attributes(which(mod_garden_edu_diaBP$beta[, i] != 0))$names
-  new_deviance <- mod_garden_edu_diaBP$dev.ratio[i]
-  new_varNum <- mod_garden_edu_diaBP$df[i]
-  new_lambda <- mod_garden_edu_diaBP$lambda[i]
-  #print(new_covars); print(new_deviance); print(new_varNum)
-  
-  # See if new covars different to old covars
-  if (new_varNum != old_varNum) {
-    new_addition <- setdiff(new_covars, old_covars) # Find the new covariate that's been added
-    dev_diff <- (new_deviance - old_deviance) * 100 # Diff in deviance value between current and previous lambda value
-    dev_diff <- round(dev_diff, 3)
-    temp <- cbind(new_addition, dev_diff, new_varNum, new_lambda) # Merge with template data frame
-    df <- rbind(df, temp)
-  }
-  
-  # Rename the old covars, deviance and variable number
-  old_covars <- new_covars
-  old_deviance <- new_deviance
-  old_varNum <- new_varNum
-}
-
-colnames(df) <- c("Variables", "DevDiff", "VarNum", "Lambda")
-df
-
-# If two variables added at once, combine names together (else impossible to read on plot)
-df$Variables[df$Variables == "age_f7"] <- "covars"
-df$Variables[df$Variables == "green_inc12_int"] <- "green_inc12_int/green_dec23"
-df
-
-df <- df[df$Variables != "male", ]
-df <- df[df$Variables != "white", ]
-df <- df[df$Variables != "edu", ]
-df <- df[df$Variables != "green_dec23", ]
-df
-
-# Make a var to show number of steps where variables added
-df$steps <- 1:nrow(df)
+# First, use the 'lasso-table' function defined above to pick out the changes in variables and the increment in deviance ratio
+df <- lasso_table(mod_garden_edu_diaBP)
 df
 
 
@@ -7189,6 +5752,22 @@ x_hypos <- data_garden_dep_bmi %>%
 x_hypos <- as.matrix(x_hypos)
 
 
+## Check correlation matrix of all these hypotheses (>0.9 would be a cause for concern)
+dim(x_hypos)
+cor(x_hypos[,5:20])
+cor(x_hypos[,5:20]) > 0.9
+cor(x_hypos[,5:20]) > 0.95
+
+# Biggest issues are with the accumulation variables, which are highly correlated with the critical period variables, so will drop these accumulation variables from these analysis due to collinearity and effectively measuring the same thing. Unlike the other exposures, here the main issue is with the accumulation interaction, rather than the accumulation-only variable, so will just drop the interaction term here. 
+x_hypos <- x_hypos[,!colnames(x_hypos) %in% c("int_accum")]
+head(x_hypos)
+
+dim(x_hypos)
+cor(x_hypos[,5:19])
+cor(x_hypos[,5:19]) > 0.9
+cor(x_hypos[,5:19]) > 0.95
+
+
 ## Run the Lasso model using GLMNET. alpha = 1 specifies L1 regularisation (lasso model), and the penalty factor option gives covariates (dep, age, sex and white) weightings of '0', so are always included in the model (default is 1)
 mod_garden_dep_bmi <- glmnet(x_hypos, data_garden_dep_bmi$BMI_f7, 
                            alpha = 1, penalty.factor = (c(0, 0, 0, 0, rep(1, ncol(x_hypos) - 4))))
@@ -7211,53 +5790,8 @@ coef(mod_garden_dep_bmi, s = max(mod_garden_dep_bmi$lambda[mod_garden_dep_bmi$df
 
 ### Visual inspection of results (although just looking at the deviance ratios there doesn't seem to be much of an effect of access to green space at all)
 
-# First, make a loop to pick out the changes in variables and the increment in deviance ratio
-old_covars <- ""
-old_deviance <- 0
-old_varNum <- 0
-old_lambda <- NA
-df <- data.frame(matrix(ncol = 4, nrow = 0))
-df
-
-for (i in 1:length(mod_garden_dep_bmi$df)) {
-  #print(i)
-  new_covars <- attributes(which(mod_garden_dep_bmi$beta[, i] != 0))$names
-  new_deviance <- mod_garden_dep_bmi$dev.ratio[i]
-  new_varNum <- mod_garden_dep_bmi$df[i]
-  new_lambda <- mod_garden_dep_bmi$lambda[i]
-  #print(new_covars); print(new_deviance); print(new_varNum)
-  
-  # See if new covars different to old covars
-  if (new_varNum != old_varNum) {
-    new_addition <- setdiff(new_covars, old_covars) # Find the new covariate that's been added
-    dev_diff <- (new_deviance - old_deviance) * 100 # Diff in deviance value between current and previous lambda value
-    dev_diff <- round(dev_diff, 3)
-    temp <- cbind(new_addition, dev_diff, new_varNum, new_lambda) # Merge with template data frame
-    df <- rbind(df, temp)
-  }
-  
-  # Rename the old covars, deviance and variable number
-  old_covars <- new_covars
-  old_deviance <- new_deviance
-  old_varNum <- new_varNum
-}
-
-colnames(df) <- c("Variables", "DevDiff", "VarNum", "Lambda")
-df
-
-# If two variables added at once, combine names together (else impossible to read on plot)
-df$Variables[df$Variables == "age_f7"] <- "covars"
-df$Variables[df$Variables == "green_dec12"] <- "green_dec12/green_dec12_int"
-df
-
-df <- df[df$Variables != "male", ]
-df <- df[df$Variables != "white", ]
-df <- df[df$Variables != "deprived", ]
-df <- df[df$Variables != "green_dec12_int", ]
-df
-
-# Make a var to show number of steps where variables added
-df$steps <- 1:nrow(df)
+# First, use the 'lasso-table' function defined above to pick out the changes in variables and the increment in deviance ratio
+df <- lasso_table(mod_garden_dep_bmi)
 df
 
 
@@ -7335,6 +5869,10 @@ x_hypos <- data_garden_dep_overweight %>%
 
 x_hypos <- as.matrix(x_hypos)
 
+## Remove the accumulation interaction variable (as high collinearity with critical period hypotheses)
+x_hypos <- x_hypos[,!colnames(x_hypos) %in% c("int_accum")]
+head(x_hypos)
+
 
 ## Run the Lasso model using GLMNET. alpha = 1 specifies L1 regularisation (lasso model), and the penalty factor option gives covariates (edu, age, sex and white) weightings of '0', so are always included in the model (default is 1)
 mod_garden_dep_over <- glmnet(x_hypos, data_garden_dep_overweight$overweight, family = "binomial",
@@ -7353,56 +5891,11 @@ coef(mod_garden_dep_over, s = max(mod_garden_dep_over$lambda[mod_garden_dep_over
 
 coef(mod_garden_dep_over, s = max(mod_garden_dep_over$lambda[mod_garden_dep_over$df == 6])); min(mod_garden_dep_over$dev.ratio[mod_garden_dep_over$df == 6])
 
-#coef(mod_garden_dep_over, s = max(mod_garden_dep_over$lambda[mod_garden_dep_over$df == 7])); min(mod_garden_dep_over$dev.ratio[mod_garden_dep_over$df == 7])
-
 
 ### Visual inspection of results (although just looking at the deviance ratios there doesn't seem to be much of an effect of access to green space at all)
 
-# First, make a loop to pick out the changes in variables and the increment in deviance ratio
-old_covars <- ""
-old_deviance <- 0
-old_varNum <- 0
-old_lambda <- NA
-df <- data.frame(matrix(ncol = 4, nrow = 0))
-df
-
-for (i in 1:length(mod_garden_dep_over$df)) {
-  #print(i)
-  new_covars <- attributes(which(mod_garden_dep_over$beta[, i] != 0))$names
-  new_deviance <- mod_garden_dep_over$dev.ratio[i]
-  new_varNum <- mod_garden_dep_over$df[i]
-  new_lambda <- mod_garden_dep_over$lambda[i]
-  #print(new_covars); print(new_deviance); print(new_varNum)
-  
-  # See if new covars different to old covars
-  if (new_varNum != old_varNum) {
-    new_addition <- setdiff(new_covars, old_covars) # Find the new covariate that's been added
-    dev_diff <- (new_deviance - old_deviance) * 100 # Diff in deviance value between current and previous lambda value
-    dev_diff <- round(dev_diff, 3)
-    temp <- cbind(new_addition, dev_diff, new_varNum, new_lambda) # Merge with template data frame
-    df <- rbind(df, temp)
-  }
-  
-  # Rename the old covars, deviance and variable number
-  old_covars <- new_covars
-  old_deviance <- new_deviance
-  old_varNum <- new_varNum
-}
-
-colnames(df) <- c("Variables", "DevDiff", "VarNum", "Lambda")
-df
-
-# If two variables added at once, combine names together (else impossible to read on plot)
-df$Variables[df$Variables == "age_f7"] <- "covars"
-df
-
-df <- df[df$Variables != "male", ]
-df <- df[df$Variables != "white", ]
-df <- df[df$Variables != "deprived", ]
-df
-
-# Make a var to show number of steps where variables added
-df$steps <- 1:nrow(df)
+# First, use the 'lasso-table' function defined above to pick out the changes in variables and the increment in deviance ratio
+df <- lasso_table(mod_garden_dep_over)
 df
 
 
@@ -7481,6 +5974,10 @@ x_hypos <- data_garden_dep_sysBP %>%
 
 x_hypos <- as.matrix(x_hypos)
 
+## Remove the accumulation interaction variable (as high collinearity with critical period hypotheses)
+x_hypos <- x_hypos[,!colnames(x_hypos) %in% c("int_accum")]
+head(x_hypos)
+
 
 ## Run the Lasso model using GLMNET. alpha = 1 specifies L1 regularisation (lasso model), and the penalty factor option gives covariates (edu, age, sex and white) weightings of '0', so are always included in the model (default is 1)
 mod_garden_dep_sysBP <- glmnet(x_hypos, data_garden_dep_sysBP$sysBP,
@@ -7504,53 +6001,8 @@ coef(mod_garden_dep_sysBP, s = max(mod_garden_dep_sysBP$lambda[mod_garden_dep_sy
 
 ### Visual inspection of results (although just looking at the deviance ratios there doesn't seem to be much of an effect of access to green space at all)
 
-# First, make a loop to pick out the changes in variables and the increment in deviance ratio
-old_covars <- ""
-old_deviance <- 0
-old_varNum <- 0
-old_lambda <- NA
-df <- data.frame(matrix(ncol = 4, nrow = 0))
-df
-
-for (i in 1:length(mod_garden_dep_sysBP$df)) {
-  #print(i)
-  new_covars <- attributes(which(mod_garden_dep_sysBP$beta[, i] != 0))$names
-  new_deviance <- mod_garden_dep_sysBP$dev.ratio[i]
-  new_varNum <- mod_garden_dep_sysBP$df[i]
-  new_lambda <- mod_garden_dep_sysBP$lambda[i]
-  #print(new_covars); print(new_deviance); print(new_varNum)
-  
-  # See if new covars different to old covars
-  if (new_varNum != old_varNum) {
-    new_addition <- setdiff(new_covars, old_covars) # Find the new covariate that's been added
-    dev_diff <- (new_deviance - old_deviance) * 100 # Diff in deviance value between current and previous lambda value
-    dev_diff <- round(dev_diff, 3)
-    temp <- cbind(new_addition, dev_diff, new_varNum, new_lambda) # Merge with template data frame
-    df <- rbind(df, temp)
-  }
-  
-  # Rename the old covars, deviance and variable number
-  old_covars <- new_covars
-  old_deviance <- new_deviance
-  old_varNum <- new_varNum
-}
-
-colnames(df) <- c("Variables", "DevDiff", "VarNum", "Lambda")
-df
-
-# If two variables added at once, combine names together (else impossible to read on plot)
-df$Variables[df$Variables == "age_f7"] <- "covars"
-df$Variables[df$Variables == "crit1"] <- "crit1/green_inc23"
-df
-
-df <- df[df$Variables != "male", ]
-df <- df[df$Variables != "white", ]
-df <- df[df$Variables != "deprived", ]
-df <- df[df$Variables != "green_inc23", ]
-df
-
-# Make a var to show number of steps where variables added
-df$steps <- 1:nrow(df)
+# First, use the 'lasso-table' function defined above to pick out the changes in variables and the increment in deviance ratio
+df <- lasso_table(mod_garden_dep_sysBP)
 df
 
 
@@ -7628,6 +6080,10 @@ x_hypos <- data_garden_dep_diaBP %>%
 
 x_hypos <- as.matrix(x_hypos)
 
+## Remove the accumulation interaction variable (as high collinearity with critical period hypotheses)
+x_hypos <- x_hypos[,!colnames(x_hypos) %in% c("int_accum")]
+head(x_hypos)
+
 
 ## Run the Lasso model using GLMNET. alpha = 1 specifies L1 regularisation (lasso model), and the penalty factor option gives covariates (edu, age, sex and white) weightings of '0', so are always included in the model (default is 1)
 mod_garden_dep_diaBP <- glmnet(x_hypos, data_garden_dep_diaBP$diaBP,
@@ -7651,54 +6107,8 @@ coef(mod_garden_dep_diaBP, s = max(mod_garden_dep_diaBP$lambda[mod_garden_dep_di
 
 ### Visual inspection of results (although just looking at the deviance ratios there doesn't seem to be much of an effect of access to green space at all)
 
-# First, make a loop to pick out the changes in variables and the increment in deviance ratio
-old_covars <- ""
-old_deviance <- 0
-old_varNum <- 0
-old_lambda <- NA
-df <- data.frame(matrix(ncol = 4, nrow = 0))
-df
-
-for (i in 1:length(mod_garden_dep_diaBP$df)) {
-  #print(i)
-  new_covars <- attributes(which(mod_garden_dep_diaBP$beta[, i] != 0))$names
-  new_deviance <- mod_garden_dep_diaBP$dev.ratio[i]
-  new_varNum <- mod_garden_dep_diaBP$df[i]
-  new_lambda <- mod_garden_dep_diaBP$lambda[i]
-  #print(new_covars); print(new_deviance); print(new_varNum)
-  
-  # See if new covars different to old covars
-  if (new_varNum != old_varNum) {
-    new_addition <- setdiff(new_covars, old_covars) # Find the new covariate that's been added
-    dev_diff <- (new_deviance - old_deviance) * 100 # Diff in deviance value between current and previous lambda value
-    dev_diff <- round(dev_diff, 3)
-    temp <- cbind(new_addition, dev_diff, new_varNum, new_lambda) # Merge with template data frame
-    df <- rbind(df, temp)
-  }
-  
-  # Rename the old covars, deviance and variable number
-  old_covars <- new_covars
-  old_deviance <- new_deviance
-  old_varNum <- new_varNum
-}
-
-colnames(df) <- c("Variables", "DevDiff", "VarNum", "Lambda")
-df
-
-# If two variables added at once, combine names together (else impossible to read on plot)
-df$Variables[df$Variables == "age_f7"] <- "covars"
-df$Variables[df$Variables == "crit3"] <- "crit3/green_inc23_int"
-df$Variables[df$Variables == "green_dec12"] <- "green_dec12/green_dec12_int"
-df
-
-df <- df[df$Variables != "male", ]
-df <- df[df$Variables != "white", ]
-df <- df[df$Variables != "deprived", ]
-df <- df[df$Variables != "green_dec12_int", ]
-df
-
-# Make a var to show number of steps where variables added
-df$steps <- 1:nrow(df)
+# First, use the 'lasso-table' function defined above to pick out the changes in variables and the increment in deviance ratio
+df <- lasso_table(mod_garden_dep_diaBP)
 df
 
 
@@ -7850,6 +6260,22 @@ x_hypos <- data_garden_inc_bmi %>%
 x_hypos <- as.matrix(x_hypos)
 
 
+## Check correlation matrix of all these hypotheses (>0.9 would be a cause for concern)
+dim(x_hypos)
+cor(x_hypos[,5:20])
+cor(x_hypos[,5:20]) > 0.9
+cor(x_hypos[,5:20]) > 0.95
+
+# Biggest issues are with the accumulation variables, which are highly correlated with the critical period variables, so will drop these accumulation variables from these analysis due to collinearity and effectively measuring the same thing. Unlike the other exposures, here the main issue is with the accumulation interaction, rather than the accumulation-only variable, so will just drop the interaction term here.
+x_hypos <- x_hypos[,!colnames(x_hypos) %in% c("int_accum")]
+head(x_hypos)
+
+dim(x_hypos)
+cor(x_hypos[,5:19])
+cor(x_hypos[,5:19]) > 0.9
+cor(x_hypos[,5:19]) > 0.95
+
+
 ## Run the Lasso model using GLMNET. alpha = 1 specifies L1 regularisation (lasso model), and the penalty factor option gives covariates (income, age, sex and white) weightings of '0', so are always included in the model (default is 1)
 mod_garden_inc_bmi <- glmnet(x_hypos, data_garden_inc_bmi$BMI_f7, 
                            alpha = 1, penalty.factor = (c(0, 0, 0, 0, rep(1, ncol(x_hypos) - 4))))
@@ -7872,57 +6298,8 @@ coef(mod_garden_inc_bmi, s = max(mod_garden_inc_bmi$lambda[mod_garden_inc_bmi$df
 
 ### Visual inspection of results (although just looking at the deviance ratios there doesn't seem to be much of an effect of access to green space at all)
 
-# First, make a loop to pick out the changes in variables and the increment in deviance ratio
-old_covars <- ""
-old_deviance <- 0
-old_varNum <- 0
-old_lambda <- NA
-df <- data.frame(matrix(ncol = 4, nrow = 0))
-df
-
-for (i in 1:length(mod_garden_inc_bmi$df)) {
-  #print(i)
-  new_covars <- attributes(which(mod_garden_inc_bmi$beta[, i] != 0))$names
-  new_deviance <- mod_garden_inc_bmi$dev.ratio[i]
-  new_varNum <- mod_garden_inc_bmi$df[i]
-  new_lambda <- mod_garden_inc_bmi$lambda[i]
-  #print(new_covars); print(new_deviance); print(new_varNum)
-  
-  # See if new covars different to old covars
-  if (new_varNum != old_varNum) {
-    new_addition <- setdiff(new_covars, old_covars) # Find the new covariate that's been added
-    dev_diff <- (new_deviance - old_deviance) * 100 # Diff in deviance value between current and previous lambda value
-    dev_diff <- round(dev_diff, 3)
-    temp <- cbind(new_addition, dev_diff, new_varNum, new_lambda) # Merge with template data frame
-    df <- rbind(df, temp)
-  }
-  
-  # Rename the old covars, deviance and variable number
-  old_covars <- new_covars
-  old_deviance <- new_deviance
-  old_varNum <- new_varNum
-}
-
-colnames(df) <- c("Variables", "DevDiff", "VarNum", "Lambda")
-df
-
-# If two variables added at once, combine names together (else impossible to read on plot)
-df$Variables[df$Variables == "age_f7"] <- "covars"
-df$Variables[df$Variables == "green_inc12"] <- "green_inc12/green_dec23_int"
-df$Variables[df$Variables == "crit2"] <- "crit2/accumulation"
-df$Variables[df$Variables == "int3"] <- "int3/int_accum"
-df
-
-df <- df[df$Variables != "male", ]
-df <- df[df$Variables != "white", ]
-df <- df[df$Variables != "lowIncome", ]
-df <- df[df$Variables != "green_dec23_int", ]
-df <- df[df$Variables != "accumulation", ]
-df <- df[df$Variables != "int_accum", ]
-df
-
-# Make a var to show number of steps where variables added
-df$steps <- 1:nrow(df)
+# First, use the 'lasso-table' function defined above to pick out the changes in variables and the increment in deviance ratio
+df <- lasso_table(mod_garden_inc_bmi)
 df
 
 
@@ -8000,6 +6377,10 @@ x_hypos <- data_garden_inc_overweight %>%
 
 x_hypos <- as.matrix(x_hypos)
 
+## Remove the accumulation interaction variable (as high collinearity with critical period hypotheses)
+x_hypos <- x_hypos[,!colnames(x_hypos) %in% c("int_accum")]
+head(x_hypos)
+
 
 ## Run the Lasso model using GLMNET. alpha = 1 specifies L1 regularisation (lasso model), and the penalty factor option gives covariates (SEP, age, sex and white) weightings of '0', so are always included in the model (default is 1)
 mod_garden_inc_over <- glmnet(x_hypos, data_garden_inc_overweight$overweight, family = "binomial",
@@ -8023,55 +6404,8 @@ coef(mod_garden_inc_over, s = max(mod_garden_inc_over$lambda[mod_garden_inc_over
 
 ### Visual inspection of results (although just looking at the deviance ratios there doesn't seem to be much of an effect of access to green space at all)
 
-# First, make a loop to pick out the changes in variables and the increment in deviance ratio
-old_covars <- ""
-old_deviance <- 0
-old_varNum <- 0
-old_lambda <- NA
-df <- data.frame(matrix(ncol = 4, nrow = 0))
-df
-
-for (i in 1:length(mod_garden_inc_over$df)) {
-  #print(i)
-  new_covars <- attributes(which(mod_garden_inc_over$beta[, i] != 0))$names
-  new_deviance <- mod_garden_inc_over$dev.ratio[i]
-  new_varNum <- mod_garden_inc_over$df[i]
-  new_lambda <- mod_garden_inc_over$lambda[i]
-  #print(new_covars); print(new_deviance); print(new_varNum)
-  
-  # See if new covars different to old covars
-  if (new_varNum != old_varNum) {
-    new_addition <- setdiff(new_covars, old_covars) # Find the new covariate that's been added
-    dev_diff <- (new_deviance - old_deviance) * 100 # Diff in deviance value between current and previous lambda value
-    dev_diff <- round(dev_diff, 3)
-    temp <- cbind(new_addition, dev_diff, new_varNum, new_lambda) # Merge with template data frame
-    df <- rbind(df, temp)
-  }
-  
-  # Rename the old covars, deviance and variable number
-  old_covars <- new_covars
-  old_deviance <- new_deviance
-  old_varNum <- new_varNum
-}
-
-colnames(df) <- c("Variables", "DevDiff", "VarNum", "Lambda")
-df
-
-# If two variables added at once, combine names together (else impossible to read on plot)
-df$Variables[df$Variables == "age_f7"] <- "covars"
-df$Variables[df$Variables == "green_inc12_int"] <- "green_inc12_int/green_dec23_int"
-df$Variables[df$Variables == "green_inc23"] <- "green_inc23/green_inc23_int"
-df
-
-df <- df[df$Variables != "male", ]
-df <- df[df$Variables != "white", ]
-df <- df[df$Variables != "lowIncome", ]
-df <- df[df$Variables != "green_dec23_int", ]
-df <- df[df$Variables != "green_inc23_int", ]
-df
-
-# Make a var to show number of steps where variables added
-df$steps <- 1:nrow(df)
+# First, use the 'lasso-table' function defined above to pick out the changes in variables and the increment in deviance ratio
+df <- lasso_table(mod_garden_inc_over)
 df
 
 
@@ -8152,6 +6486,10 @@ x_hypos <- data_garden_inc_sysBP %>%
 
 x_hypos <- as.matrix(x_hypos)
 
+## Remove the accumulation interaction variable (as high collinearity with critical period hypotheses)
+x_hypos <- x_hypos[,!colnames(x_hypos) %in% c("int_accum")]
+head(x_hypos)
+
 
 ## Run the Lasso model using GLMNET. alpha = 1 specifies L1 regularisation (lasso model), and the penalty factor option gives covariates (income, age, sex and white) weightings of '0', so are always included in the model (default is 1)
 mod_garden_inc_sysBP <- glmnet(x_hypos, data_garden_inc_sysBP$sysBP,
@@ -8175,53 +6513,8 @@ coef(mod_garden_inc_sysBP, s = max(mod_garden_inc_sysBP$lambda[mod_garden_inc_sy
 
 ### Visual inspection of results (although just looking at the deviance ratios there doesn't seem to be much of an effect of access to green space at all)
 
-# First, make a loop to pick out the changes in variables and the increment in deviance ratio
-old_covars <- ""
-old_deviance <- 0
-old_varNum <- 0
-old_lambda <- NA
-df <- data.frame(matrix(ncol = 4, nrow = 0))
-df
-
-for (i in 1:length(mod_garden_inc_sysBP$df)) {
-  #print(i)
-  new_covars <- attributes(which(mod_garden_inc_sysBP$beta[, i] != 0))$names
-  new_deviance <- mod_garden_inc_sysBP$dev.ratio[i]
-  new_varNum <- mod_garden_inc_sysBP$df[i]
-  new_lambda <- mod_garden_inc_sysBP$lambda[i]
-  #print(new_covars); print(new_deviance); print(new_varNum)
-  
-  # See if new covars different to old covars
-  if (new_varNum != old_varNum) {
-    new_addition <- setdiff(new_covars, old_covars) # Find the new covariate that's been added
-    dev_diff <- (new_deviance - old_deviance) * 100 # Diff in deviance value between current and previous lambda value
-    dev_diff <- round(dev_diff, 3)
-    temp <- cbind(new_addition, dev_diff, new_varNum, new_lambda) # Merge with template data frame
-    df <- rbind(df, temp)
-  }
-  
-  # Rename the old covars, deviance and variable number
-  old_covars <- new_covars
-  old_deviance <- new_deviance
-  old_varNum <- new_varNum
-}
-
-colnames(df) <- c("Variables", "DevDiff", "VarNum", "Lambda")
-df
-
-# If two variables added at once, combine names together (else impossible to read on plot)
-df$Variables[df$Variables == "age_f7"] <- "covars"
-df$Variables[df$Variables == "int3"] <- "int3/green_dec23"
-df
-
-df <- df[df$Variables != "male", ]
-df <- df[df$Variables != "white", ]
-df <- df[df$Variables != "lowIncome", ]
-df <- df[df$Variables != "green_dec23", ]
-df
-
-# Make a var to show number of steps where variables added
-df$steps <- 1:nrow(df)
+# First, use the 'lasso-table' function defined above to pick out the changes in variables and the increment in deviance ratio
+df <- lasso_table(mod_garden_inc_sysBP)
 df
 
 
@@ -8299,6 +6592,10 @@ x_hypos <- data_garden_inc_diaBP %>%
 
 x_hypos <- as.matrix(x_hypos)
 
+## Remove the accumulation interaction variable (as high collinearity with critical period hypotheses)
+x_hypos <- x_hypos[,!colnames(x_hypos) %in% c("int_accum")]
+head(x_hypos)
+
 
 ## Run the Lasso model using GLMNET. alpha = 1 specifies L1 regularisation (lasso model), and the penalty factor option gives covariates (income, age, sex and white) weightings of '0', so are always included in the model (default is 1)
 mod_garden_inc_diaBP <- glmnet(x_hypos, data_garden_inc_diaBP$diaBP,
@@ -8322,57 +6619,8 @@ coef(mod_garden_inc_diaBP, s = max(mod_garden_inc_diaBP$lambda[mod_garden_inc_di
 
 ### Visual inspection of results (although just looking at the deviance ratios there doesn't seem to be much of an effect of access to green space at all)
 
-# First, make a loop to pick out the changes in variables and the increment in deviance ratio
-old_covars <- ""
-old_deviance <- 0
-old_varNum <- 0
-old_lambda <- NA
-df <- data.frame(matrix(ncol = 4, nrow = 0))
-df
-
-for (i in 1:length(mod_garden_inc_diaBP$df)) {
-  #print(i)
-  new_covars <- attributes(which(mod_garden_inc_diaBP$beta[, i] != 0))$names
-  new_deviance <- mod_garden_inc_diaBP$dev.ratio[i]
-  new_varNum <- mod_garden_inc_diaBP$df[i]
-  new_lambda <- mod_garden_inc_diaBP$lambda[i]
-  #print(new_covars); print(new_deviance); print(new_varNum)
-  
-  # See if new covars different to old covars
-  if (new_varNum != old_varNum) {
-    new_addition <- setdiff(new_covars, old_covars) # Find the new covariate that's been added
-    dev_diff <- (new_deviance - old_deviance) * 100 # Diff in deviance value between current and previous lambda value
-    dev_diff <- round(dev_diff, 3)
-    temp <- cbind(new_addition, dev_diff, new_varNum, new_lambda) # Merge with template data frame
-    df <- rbind(df, temp)
-  }
-  
-  # Rename the old covars, deviance and variable number
-  old_covars <- new_covars
-  old_deviance <- new_deviance
-  old_varNum <- new_varNum
-}
-
-colnames(df) <- c("Variables", "DevDiff", "VarNum", "Lambda")
-df
-
-# If two variables added at once, combine names together (else impossible to read on plot)
-df$Variables[df$Variables == "age_f7"] <- "covars"
-df$Variables[df$Variables == "crit1"] <- "crit1/green_inc23_int"
-df$Variables[df$Variables == "crit3"] <- "crit3/green_dec12"
-df$Variables[df$Variables == "green_inc23"] <- "green_inc23/green_dec23_int"
-df
-
-df <- df[df$Variables != "male", ]
-df <- df[df$Variables != "white", ]
-df <- df[df$Variables != "lowIncome", ]
-df <- df[df$Variables != "green_inc23_int", ]
-df <- df[df$Variables != "green_dec12", ]
-df <- df[df$Variables != "green_dec23_int", ]
-df
-
-# Make a var to show number of steps where variables added
-df$steps <- 1:nrow(df)
+# First, use the 'lasso-table' function defined above to pick out the changes in variables and the increment in deviance ratio
+df <- lasso_table(mod_garden_inc_diaBP)
 df
 
 
