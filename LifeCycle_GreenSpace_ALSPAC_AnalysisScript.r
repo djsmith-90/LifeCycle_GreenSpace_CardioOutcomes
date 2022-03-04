@@ -57,6 +57,36 @@ dag <- dagitty('dag {
 plot(dag)
 
 
+## Will also make a simplified DAG, with all of the green space variables collapsed together
+dag_simp <- dagitty('dag {
+                SEP [pos = "1,1"]
+                GreenSpace [pos = "0,2"]
+                SEP_GreenSpace_int [pos = "1,1.5"]
+                Cardio [pos = "2,2"]
+                Ethnicity [pos = "1,0.5"]
+                Age [pos = "1.85,1"]
+                Sex [pos = "2.15,1"]
+                
+                SEP -> GreenSpace
+                SEP -> Cardio
+                GreenSpace -> SEP_GreenSpace_int
+                SEP -> SEP_GreenSpace_int
+                SEP_GreenSpace_int -> Cardio
+                GreenSpace -> Cardio
+                Ethnicity -> GreenSpace
+                Ethnicity -> SEP
+                Ethnicity -> Cardio
+                Age -> Cardio
+                Sex -> Cardio
+                }')
+plot(dag_simp)
+
+# Save this DAG
+pdf("GreenSpaceDAG.pdf", height = 4, width = 8)
+plot(dag_simp)
+dev.off()
+
+
 
 ### Will also initialise a function to turn lasso output into a useful summary table
 lasso_table <- function(lasso_model) {

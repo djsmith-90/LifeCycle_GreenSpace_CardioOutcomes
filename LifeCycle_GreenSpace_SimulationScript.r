@@ -269,9 +269,9 @@ for (i in 1:length(mod$df)) {
 colnames(df) <- c("Variables", "DevRatio", "DevDiff", "VarNum", "Lambda")
 df
 
-# Make a var to show number of steps where variables added, and rename the covars
+# Make a var to show number of steps where variables added, and rename the high_sep variable to remove the '+'
 df$steps <- 1:nrow(df)
-df$Variables[df$steps == 1] <- "covars"
+df$Variables[df$steps == 1] <- "high_sep"
 df
 
 
@@ -469,9 +469,9 @@ for (i in 1:length(mod.binary$df)) {
 colnames(df) <- c("Variables", "DevRatio", "DevDiff", "VarNum", "Lambda")
 df
 
-# Make a var to show number of steps where variables added, and rename the covars
+# Make a var to show number of steps where variables added, and rename the high_sep variable to remove the '+'
 df$steps <- 1:nrow(df)
-df$Variables[df$steps == 1] <- "covars"
+df$Variables[df$steps == 1] <- "high_sep"
 df
 
 
