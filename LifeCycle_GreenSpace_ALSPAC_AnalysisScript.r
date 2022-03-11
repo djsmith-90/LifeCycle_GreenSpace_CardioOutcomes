@@ -176,6 +176,7 @@ data <- data %>%
   mutate(BMI_f7 = ifelse(BMI_f7 < 0, NA, BMI_f7))
 
 summary(data$BMI_f7)
+sd(data$BMI_f7, na.rm = TRUE)
 hist(data$BMI_f7)
 
 
@@ -196,7 +197,7 @@ data <- data %>%
   mutate(overweight = fct_recode(overweight, "Yes" = "1", "No" = "0"))
 
 table(data$overweight, useNA = "ifany")
-
+prop.table(table(data$overweight)) * 100
 
 ## Systolic and diastolic blood pressure
 summary(data$f7sa021); summary(data$f7sa022)
@@ -207,6 +208,7 @@ data <- data %>%
   mutate(diaBP = ifelse(diaBP < 0, NA, diaBP))
 
 summary(data$sysBP); summary(data$diaBP)
+sd(data$sysBP, na.rm = TRUE); sd(data$diaBP, na.rm = TRUE)
 hist(data$sysBP)
 hist(data$diaBP)
 
@@ -227,8 +229,16 @@ data <- data %>%
   select(-cc)
 
 table(data$greenSpace_preg, useNA = "ifany")
+prop.table(table(data$greenSpace_preg)) * 100
+prop.table(table(data$greenSpace_preg, useNA = "ifany")) * 100
+
 table(data$greenSpace_4, useNA = "ifany")
+prop.table(table(data$greenSpace_4)) * 100
+prop.table(table(data$greenSpace_4, useNA = "ifany")) * 100
+
 table(data$greenSpace_7, useNA = "ifany")
+prop.table(table(data$greenSpace_7)) * 100
+prop.table(table(data$greenSpace_7, useNA = "ifany")) * 100
 
 # Create pattern of green space access over time at all 3 time-points
 data <- data %>%
@@ -274,6 +284,7 @@ data <- data %>%
   select(-cc)
 
 summary(data$greenDist_preg); summary(data$greenDist_4); summary(data$greenDist_7)
+sd(data$greenDist_preg, na.rm = TRUE); sd(data$greenDist_4, na.rm = TRUE); sd(data$greenDist_7, na.rm = TRUE)
 hist(data$greenDist_preg)
 hist(data$greenDist_4)
 hist(data$greenDist_7)
@@ -297,6 +308,7 @@ data <- data %>%
   select(-cc)
 
 summary(data$NDVI500_preg); summary(data$NDVI500_4); summary(data$NDVI500_7)
+sd(data$NDVI500_preg, na.rm = TRUE); sd(data$NDVI500_4, na.rm = TRUE); sd(data$NDVI500_7, na.rm = TRUE)
 barplot(table(data$NDVI500_preg))
 barplot(table(data$NDVI500_4))
 barplot(table(data$NDVI500_7))
@@ -339,8 +351,16 @@ data <- data %>%
                               ifelse(garden_7 == 3, 0, garden_7)))
 
 table(data$garden_preg, useNA = "ifany")
+prop.table(table(data$garden_preg)) * 100
+prop.table(table(data$garden_preg, useNA = "ifany")) * 100
+
 table(data$garden_4, useNA = "ifany")
+prop.table(table(data$garden_4)) * 100
+prop.table(table(data$garden_4, useNA = "ifany")) * 100
+
 table(data$garden_7, useNA = "ifany")
+prop.table(table(data$garden_7)) * 100
+prop.table(table(data$garden_7, useNA = "ifany")) * 100
 
 # Create pattern of green space access over time at all 3 time-points
 data <- data %>%
@@ -395,6 +415,8 @@ data <- data %>%
                       ifelse(c645a > 3 | c666a > 3, 1, 0)))
 
 table(data$edu, useNA = "ifany")
+prop.table(table(data$edu)) * 100
+prop.table(table(data$edu, useNA = "ifany")) * 100
 
 
 ## Deprivation/SES - Compare ALSPAC IMD and LifeCycle SES first - Are highly correlated, but not identical. Will just use the LifeCycle data here.
@@ -411,6 +433,8 @@ data <- data %>%
                            ifelse(areaSES_preg > 3, 1, 0)))
 
 table(data$deprived, useNA = "ifany")
+prop.table(table(data$deprived)) * 100
+prop.table(table(data$deprived, useNA = "ifany")) * 100
 
 
 ## Log equivalised household income - Will code quintiles 1 and 2 as 'low income'
@@ -422,7 +446,8 @@ data <- data %>%
                             ifelse(eusilc_income_quintiles < 3, 1, 0)))
 
 table(data$lowIncome, useNA = "ifany")
-
+prop.table(table(data$lowIncome)) * 100
+prop.table(table(data$lowIncome, useNA = "ifany")) * 100
 
 
 ### And finally some of the additional confounders/covariates
@@ -435,6 +460,7 @@ data <- data %>%
   mutate(male = ifelse(male == 1, 1, 0))
 
 table(data$male, useNA = "ifany")
+prop.table(table(data$male, useNA = "ifany")) * 100
 
 
 ## Age of child at F@7 clinic (months)
@@ -443,6 +469,8 @@ summary(data$f7003c)
 data <- data %>%
   rename(age_f7 = f7003c)
 
+summary(data$age_f7)
+sd(data$age_f7, na.rm = TRUE)
 hist(data$age_f7)
 
 
@@ -458,6 +486,8 @@ data <- data %>%
                             ifelse(white > 1, 0, white)))
 
 table(data$white, useNA = "ifany")
+prop.table(table(data$white)) * 100
+prop.table(table(data$white, useNA = "ifany")) * 100
 
 
 
@@ -541,6 +571,7 @@ data_access_edu_bmi <- data_access_edu %>%
   filter(complete.cases(BMI_f7, age_f7, male, white, edu, crit1, int1))
 
 summary(data_access_edu_bmi)
+nrow(data_access_edu_bmi)
 
 # Save the life-course hypotheses and covariates as a matrix
 x_hypos <- data_access_edu_bmi %>%
@@ -740,6 +771,43 @@ coef(mod_access_edu_bmi2, s = max(mod_access_edu_bmi2$lambda[mod_access_edu_bmi2
 
 coef(mod_access_edu_bmi2, s = max(mod_access_edu_bmi2$lambda[mod_access_edu_bmi2$df == 6])); min(mod_access_edu_bmi2$dev.ratio[mod_access_edu_bmi2$df == 6])
 
+
+### Visual inspection of results (although just looking at the deviance ratios there doesn't seem to be much of an effect of access to green space at all)
+
+# First, use the 'lasso-table' function defined above to pick out the changes in variables and the increment in deviance ratio
+df <- lasso_table(mod_access_edu_bmi2)
+df
+
+
+# Make a plot of deviance ratio by lambda value, to show the time variables were entered and the improvement in model fit.
+plot(mod_access_edu_bmi2$lambda, mod_access_edu_bmi2$dev.ratio, type = "l",
+     xlab = "Lambda value", ylab = "Deviance ratio", 
+     xlim = rev(range(mod_access_edu_bmi2$lambda)), ylim = c(0, max(mod_access_edu_bmi2$dev.ratio)))
+text(df$Lambda, 0, labels = df$Variables, srt = 90, adj = 0)
+
+## Put lambda on the log scale, else differences between early models inflated, as lambda decreases on log scale. This does make the plot slightly more readable, and groups early-included variables closer together
+mod_access_edu_bmi2$log_lambda <- log(mod_access_edu_bmi2$lambda)
+mod_access_edu_bmi2
+
+df$log_lambda <- log(as.numeric(df$Lambda))
+df
+
+
+# This looks better, although one misleading aspect is that lasso works by initialising the lambda value just above the threshold where no variables are entered (excluding covariates restrained to be in the model). This means that there will always be a 'first' variable entered early in the model, making it seem like this is the best fit to the data. However, because there always *has* to be one variable entered first, it doesn't mean that this is actually predictive of the outcome. In the plot here, even though 'green_inc23' was entered first, the actual model fit improvement over the null/covariate-only model is minimal (0.007% increase in deviance ratio), which is essentially 0, suggesting there is little/no association between access to green space and BMI.
+plot(mod_access_edu_bmi2$log_lambda, mod_access_edu_bmi2$dev.ratio, type = "l",
+     xlab = "Log lambda value", ylab = "Deviance ratio", 
+     xlim = rev(range(mod_access_edu_bmi2$log_lambda)), ylim = c(0.008, max(mod_access_edu_bmi2$dev.ratio)))
+text(df$log_lambda, 0.008, labels = df$Variables, srt = 90, adj = 0)
+
+# save this plot
+pdf(file = "LogLambdaPlot_accessEduBMI_2Exposures.pdf", height = 7, width = 11)
+plot(mod_access_edu_bmi2$log_lambda, mod_access_edu_bmi2$dev.ratio, type = "l",
+     xlab = "Log lambda value", ylab = "Deviance ratio", 
+     xlim = rev(range(mod_access_edu_bmi2$log_lambda)), ylim = c(0.008, max(mod_access_edu_bmi2$dev.ratio)))
+text(df$log_lambda, 0.008, labels = df$Variables, srt = 90, adj = 0)
+dev.off()
+
+
 # Increase in model fit when first variables entered is again minimal (0.003% compared to baseline), suggesting little association - Get same conclusion if use LR test or cross-validated lasso
 (mod_access_edu_bmi2$dev.ratio[2] - mod_access_edu_bmi2$dev.ratio[1]) * 100
 
@@ -763,39 +831,6 @@ coef(mod.cv2, s = mod.cv2$lambda.1se)
 coef(mod.cv2, s = mod.cv2$lambda.min)
 
 
-## Quick check whether is any association with green space access is not include any of the covariates (using the 3 time-point model)
-x_hypos_noCovars <- x_hypos[,!colnames(x_hypos) %in% c("age_f7", "male", "white", "edu")]
-head(x_hypos_noCovars)
-
-mod_access_edu_bmi_nocovs <- glmnet(x_hypos_noCovars, data_access_edu_bmi$BMI_f7, alpha = 1)
-mod_access_edu_bmi_nocovs
-#coef(mod_access_edu_bmi_nocovs)
-
-coef(mod_access_edu_bmi_nocovs, s = max(mod_access_edu_bmi_nocovs$lambda[mod_access_edu_bmi_nocovs$df == 1])); min(mod_access_edu_bmi_nocovs$dev.ratio[mod_access_edu_bmi_nocovs$df == 1])
-
-
-# Even without other covariates, improvement in model fit is still pretty minimal (0.009%, relative to null model)
-(mod_access_edu_bmi_nocovs$dev.ratio[2] - mod_access_edu_bmi_nocovs$dev.ratio[1]) * 100
-
-# Again, same results if use LR test and cross-validated lasso
-base_mod_nocovs <- lm(data_access_edu_bmi$BMI_f7 ~ 1)
-summary(base_mod_nocovs)
-
-param1_mod_nocovs <- lm(data_access_edu_bmi$BMI_f7 ~ x_hypos_noCovars[, "green_inc23"])
-summary(param1_mod_nocovs)
-
-anova(base_mod_nocovs, param1_mod_nocovs)
-
-
-# Alternative method using cross-validated lasso (again, both give null model as best fit)
-mod.cv_nocovs <- cv.glmnet(x_hypos_noCovars, data_access2_edu_bmi$BMI_f7, alpha = 1)
-mod.cv_nocovs
-
-coef(mod.cv_nocovs, s = mod.cv_nocovs$lambda.1se)
-coef(mod.cv_nocovs, s = mod.cv_nocovs$lambda.min)
-
-
-
 #### Next, will explore binary access to green space exposure, with education as covariate/interaction term, and binary overweight variable as the outcome
 
 # Reduce dataset down to just complete cases
@@ -804,6 +839,7 @@ data_access_edu_overweight <- data_access_edu %>%
   filter(complete.cases(overweight, age_f7, male, white, edu, crit1, int1))
 
 summary(data_access_edu_overweight)
+nrow(data_access_edu_overweight)
 
 # Save the life-course hypotheses and covariates as a matrix
 x_hypos <- data_access_edu_overweight %>%
@@ -910,6 +946,7 @@ data_access_edu_sysBP <- data_access_edu %>%
   filter(complete.cases(sysBP, age_f7, male, white, edu, crit1, int1))
 
 summary(data_access_edu_sysBP)
+nrow(data_access_edu_sysBP)
 
 # Save the life-course hypotheses and covariates as a matrix
 x_hypos <- data_access_edu_sysBP %>%
@@ -1016,6 +1053,7 @@ data_access_edu_diaBP <- data_access_edu %>%
   filter(complete.cases(diaBP, age_f7, male, white, edu, crit1, int1))
 
 summary(data_access_edu_diaBP)
+nrow(data_access_edu_diaBP)
 
 # Save the life-course hypotheses and covariates as a matrix
 x_hypos <- data_access_edu_diaBP %>%
