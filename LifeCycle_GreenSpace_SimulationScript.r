@@ -243,6 +243,11 @@ for (i in 1:length(mod$df)) {
     change <- setdiff(new_covars, old_covars) # Find the new covariate(s) added
     change <- paste(change, collapse = " ") # Combine variable together, if > 1
     change <- paste0(change, " (+)") # Append a "(+)" sign
+    change_drop <- setdiff(old_covars, new_covars) # Make sure no covariates dropped at same time
+    if (!identical(change_drop, character(0))) { # If a covar also dropped, then combine with 'change'
+      change_drop <- paste(change_drop, collapse = " ") # Combine variable together, if > 1
+      change <- paste0(change, " ", change_drop, " (-)")
+    }
     dev_diff <- round((new_deviance - old_deviance) * 100, 3) # Diff in deviance between current and previous lambda
     new_dev <- round(new_deviance * 100, 3) # Current deviance value
     temp <- cbind(change, new_dev, dev_diff, new_varNum, new_lambda) # Combine values together
@@ -254,6 +259,26 @@ for (i in 1:length(mod$df)) {
     change <- setdiff(old_covars, new_covars) # Find the covariate(s) removed
     change <- paste(change, collapse = " ") # Combine variable together, if > 1
     change <- paste0(change, " (-)") # Append a "(-)" sign
+    change_add <- setdiff(new_covars, old_covars) # Make sure no covariates added at same time
+    if (!identical(change_add, character(0))) { # If a covar also dropped, then combine with 'change'
+      change_add <- paste(change_add, collapse = " ") # Combine variable together, if > 1
+      change <- paste0(change, " ", change_add, " (+)")
+    }
+    dev_diff <- round((new_deviance - old_deviance) * 100, 3) # Diff in deviance between current and previous lambda
+    new_dev <- round(new_deviance * 100, 3) # Current deviance value
+    temp <- cbind(change, new_dev, dev_diff, new_varNum, new_lambda) # Combine values together
+    df <- rbind(df, temp) # Merge with template data frame
+  }
+  
+  # See if covars added and removed at the same time (where number of variables stays the same)
+  if (new_varNum == old_varNum & setequal(old_covars, new_covars) == FALSE) {
+    change_add <- setdiff(new_covars, old_covars) # Find the covariate(s) added
+    change_add <- paste(change_add, collapse = " ") # Combine variables together, if > 1
+    change_add <- paste0(change_add, " (+)") # Append a "(+)" sign
+    change_drop <- setdiff(old_covars, new_covars) # Find the covariate(s) removed
+    change_drop <- paste(change_drop, collapse = " ") # Combine variables together, if > 1
+    change_drop <- paste0(change_drop, " (-)") # Append a "(-)" sign
+    change <- paste0(change_add, " ", change_drop) # Combine the added and dropped variables together
     dev_diff <- round((new_deviance - old_deviance) * 100, 3) # Diff in deviance between current and previous lambda
     new_dev <- round(new_deviance * 100, 3) # Current deviance value
     temp <- cbind(change, new_dev, dev_diff, new_varNum, new_lambda) # Combine values together
@@ -443,6 +468,11 @@ for (i in 1:length(mod.binary$df)) {
     change <- setdiff(new_covars, old_covars) # Find the new covariate(s) added
     change <- paste(change, collapse = " ") # Combine variable together, if > 1
     change <- paste0(change, " (+)") # Append a "(+)" sign
+    change_drop <- setdiff(old_covars, new_covars) # Make sure no covariates dropped at same time
+    if (!identical(change_drop, character(0))) { # If covar also dropped, then combine with 'change'
+      change_drop <- paste(change_drop, collapse = " ") # Combine variable together, if > 1
+      change <- paste0(change, " ", change_drop, " (-)")
+    }
     dev_diff <- round((new_deviance - old_deviance) * 100, 3) # Diff in deviance between current and previous lambda
     new_dev <- round(new_deviance * 100, 3) # Current deviance value
     temp <- cbind(change, new_dev, dev_diff, new_varNum, new_lambda) # Combine values together
@@ -454,6 +484,26 @@ for (i in 1:length(mod.binary$df)) {
     change <- setdiff(old_covars, new_covars) # Find the covariate(s) removed
     change <- paste(change, collapse = " ") # Combine variable together, if > 1
     change <- paste0(change, " (-)") # Append a "(-)" sign
+    change_add <- setdiff(new_covars, old_covars) # Make sure no covariates added at same time
+    if (!identical(change_add, character(0))) { # If covar also dropped, then combine with 'change'
+      change_add <- paste(change_add, collapse = " ") # Combine variable together, if > 1
+      change <- paste0(change, " ", change_add, " (+)")
+    }
+    dev_diff <- round((new_deviance - old_deviance) * 100, 3) # Diff in deviance between current and previous lambda
+    new_dev <- round(new_deviance * 100, 3) # Current deviance value
+    temp <- cbind(change, new_dev, dev_diff, new_varNum, new_lambda) # Combine values together
+    df <- rbind(df, temp) # Merge with template data frame
+  }
+  
+  # See if covars added and removed at the same time (where number of variables stays the same)
+  if (new_varNum == old_varNum & setequal(old_covars, new_covars) == FALSE) {
+    change_add <- setdiff(new_covars, old_covars) # Find the covariate(s) added
+    change_add <- paste(change_add, collapse = " ") # Combine variables together, if > 1
+    change_add <- paste0(change_add, " (+)") # Append a "(+)" sign
+    change_drop <- setdiff(old_covars, new_covars) # Find the covariate(s) removed
+    change_drop <- paste(change_drop, collapse = " ") # Combine variables together, if > 1
+    change_drop <- paste0(change_drop, " (-)") # Append a "(-)" sign
+    change <- paste0(change_add, " ", change_drop) # Combine the added and dropped variables together
     dev_diff <- round((new_deviance - old_deviance) * 100, 3) # Diff in deviance between current and previous lambda
     new_dev <- round(new_deviance * 100, 3) # Current deviance value
     temp <- cbind(change, new_dev, dev_diff, new_varNum, new_lambda) # Combine values together

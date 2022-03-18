@@ -110,6 +110,11 @@ lasso_table <- function(lasso_model) {
       change <- setdiff(new_covars, old_covars) # Find the new covariate(s) added
       change <- paste(change, collapse = " ") # Combine variable together, if > 1
       change <- paste0(change, " (+)") # Append a "(+)" sign
+      change_drop <- setdiff(old_covars, new_covars) # Make sure no covariates dropped at same time
+      if (!identical(change_drop, character(0))) { # If a covar also dropped, then combine with 'change'
+        change_drop <- paste(change_drop, collapse = " ") # Combine variable together, if > 1
+        change <- paste0(change, " ", change_drop, " (-)")
+      }
       dev_diff <- round((new_deviance - old_deviance) * 100, 3) # Diff in deviance between current and previous lambda
       new_dev <- round(new_deviance * 100, 3) # Current deviance value
       temp <- cbind(change, new_dev, dev_diff, new_varNum, new_lambda) # Combine values together
@@ -121,6 +126,26 @@ lasso_table <- function(lasso_model) {
       change <- setdiff(old_covars, new_covars) # Find the covariate(s) removed
       change <- paste(change, collapse = " ") # Combine variable together, if > 1
       change <- paste0(change, " (-)") # Append a "(-)" sign
+      change_add <- setdiff(new_covars, old_covars) # Make sure no covariates added at same time
+      if (!identical(change_add, character(0))) { # If a covar also dropped, then combine with 'change'
+        change_add <- paste(change_add, collapse = " ") # Combine variable together, if > 1
+        change <- paste0(change, " ", change_add, " (+)")
+      }
+      dev_diff <- round((new_deviance - old_deviance) * 100, 3) # Diff in deviance between current and previous lambda
+      new_dev <- round(new_deviance * 100, 3) # Current deviance value
+      temp <- cbind(change, new_dev, dev_diff, new_varNum, new_lambda) # Combine values together
+      df <- rbind(df, temp) # Merge with template data frame
+    }
+    
+    # See if covars added and removed at the same time (where number of variables stays the same)
+    if (new_varNum == old_varNum & setequal(old_covars, new_covars) == FALSE) {
+      change_add <- setdiff(new_covars, old_covars) # Find the covariate(s) added
+      change_add <- paste(change_add, collapse = " ") # Combine variables together, if > 1
+      change_add <- paste0(change_add, " (+)") # Append a "(+)" sign
+      change_drop <- setdiff(old_covars, new_covars) # Find the covariate(s) removed
+      change_drop <- paste(change_drop, collapse = " ") # Combine variables together, if > 1
+      change_drop <- paste0(change_drop, " (-)") # Append a "(-)" sign
+      change <- paste0(change_add, " ", change_drop) # Combine the added and dropped variables together
       dev_diff <- round((new_deviance - old_deviance) * 100, 3) # Diff in deviance between current and previous lambda
       new_dev <- round(new_deviance * 100, 3) # Current deviance value
       temp <- cbind(change, new_dev, dev_diff, new_varNum, new_lambda) # Combine values together
@@ -683,7 +708,197 @@ coef(mod.cv, s = mod.cv$lambda.min)
 ### All methods match up pretty well, and indicate very little association between access to green space in childhood and BMI at age 7 (when controlling for ethnicity and parental education).
 
 
-#### As a sensitivity analysis, will check whether get same results using just 2 time-points (birth and age 7).
+#### As a sensitivity analysis, will try centering all the exposures before constructing the hypotheses, as this should reduce the correlations between the interaction terms (and give the model extra power to detect the true effect)
+data_access_c <- data
+summary(data_access_c)
+
+
+## Encode the hypotheses, with education as the SEP covariate/interaction term, and then centering the variables afterwards
+
+# Critical period at first time point only
+data_access_c$crit1 <- data_access_c$greenSpace_preg
+data_access_c$crit1 <- data_access_c$crit1 - mean(data_access_c$crit1, na.rm = TRUE)
+
+# Interaction between SEP and first time point
+data_access_c$int1 <- data_access_c$crit1 * data_access_c$edu
+
+# Critical period at second time point only
+data_access_c$crit2 <- data_access_c$greenSpace_4
+data_access_c$crit2 <- data_access_c$crit2 - mean(data_access_c$crit2, na.rm = TRUE)
+
+# Interaction between SEP and second time point
+data_access_c$int2 <- data_access_c$crit2 * data_access_c$edu
+
+# Critical period at third time point only
+data_access_c$crit3 <- data_access_c$greenSpace_7
+data_access_c$crit3 <- data_access_c$crit3 - mean(data_access_c$crit3, na.rm = TRUE)
+
+# Interaction between SEP and third time point
+data_access_c$int3 <- data_access_c$crit3 * data_access_c$edu
+
+# Linear accumulation of all exposures
+data_access_c$accumulation <- data_access_c$greenSpace_preg + data_access_c$greenSpace_4 +  data_access_c$greenSpace_7
+data_access_c$accumulation <- data_access_c$accumulation - mean(data_access_c$accumulation, na.rm = TRUE)
+
+# Interaction between SEP and cumulative exposure
+data_access_c$int_accum <- data_access_c$edu * data_access_c$accumulation
+
+# Increase in access to green space from time 1 to time 2
+data_access_c$green_inc12 <- (1 - data_access_c$greenSpace_preg) * data_access_c$greenSpace_4
+data_access_c$green_inc12 <- data_access_c$green_inc12 - mean(data_access_c$green_inc12, na.rm = TRUE)
+
+# Increase in access to green space from time 1 to time 2, with an interaction with SEP
+data_access_c$green_inc12_int <- data_access_c$green_inc12 * data_access_c$edu
+
+# Decrease in access to green space from time 1 to time 2
+data_access_c$green_dec12 <- (1 - data_access_c$greenSpace_4) * data_access_c$greenSpace_preg
+data_access_c$green_dec12 <- data_access_c$green_dec12 - mean(data_access_c$green_dec12, na.rm = TRUE)
+
+# Decrease in access to green space from time 1 to time 2, with an interaction with SEP
+data_access_c$green_dec12_int <- data_access_c$green_dec12 * data_access_c$edu
+
+# Increase in access to green space from time 2 to time 3
+data_access_c$green_inc23 <- (1 - data_access_c$greenSpace_4) * data_access_c$greenSpace_7
+data_access_c$green_inc23 <- data_access_c$green_inc23 - mean(data_access_c$green_inc23, na.rm = TRUE)
+
+# Increase in access to green space from time 2 to time 3, with an interaction with SEP
+data_access_c$green_inc23_int <- data_access_c$green_inc23 * data_access_c$edu
+
+# Decrease in access to green space from time 2 to time 3
+data_access_c$green_dec23 <- (1 - data_access_c$greenSpace_7) * data_access_c$greenSpace_4
+data_access_c$green_dec23 <- data_access_c$green_dec23 - mean(data_access_c$green_dec23, na.rm = TRUE)
+
+# Decrease in access to green space from time 2 to time 3, with an interaction with SEP
+data_access_c$green_dec23_int <- data_access_c$green_dec23 * data_access_c$edu
+
+
+## Make a dataset just with the outcomes, exposure hypotheses and covariates
+data_access_edu_c <- data_access_c %>%
+  select(BMI_f7, overweight, sysBP, diaBP, 
+         age_f7, male, white, edu, 
+         crit1, int1, crit2, int2, crit3, int3, accumulation, int_accum, green_inc12, green_inc12_int, 
+         green_dec12, green_dec12_int, green_inc23, green_inc23_int, green_dec23, green_dec23_int)
+
+
+## Now analyse the BMI outcome
+
+# Reduce dataset down to just complete cases
+data_access_edu_bmi_c <- data_access_edu_c %>%
+  select(-overweight, -sysBP, -diaBP) %>%
+  filter(complete.cases(BMI_f7, age_f7, male, white, edu, crit1, int1))
+
+summary(data_access_edu_bmi_c)
+nrow(data_access_edu_bmi_c)
+
+# Save the life-course hypotheses and covariates as a matrix
+x_hypos_c <- data_access_edu_bmi_c %>%
+  select(-BMI_f7)
+
+x_hypos_c <- as.matrix(x_hypos_c)
+
+
+## Check correlation matrix of all these hypotheses (>0.9 would be a cause for concern)
+dim(x_hypos_c)
+cor(x_hypos_c[,5:20])
+cor(x_hypos_c[,5:20]) > 0.9
+cor(x_hypos_c[,5:20]) > 0.95
+
+# Centering the variables has helped lower the correlation between the critical period interaction terms, so now none are >0.9. Accumulation is still highly correlated with the critical period variables, so will drop these accumulation variables from these analysis due to collinearity and effectively measuring the same thing.
+x_hypos_c <- x_hypos_c[,!colnames(x_hypos_c) %in% c("accumulation", "int_accum")]
+head(x_hypos_c)
+
+dim(x_hypos_c)
+cor(x_hypos_c[,5:18])
+cor(x_hypos_c[,5:18]) > 0.9
+cor(x_hypos_c[,5:18]) > 0.95
+
+
+## Run the Lasso model using GLMNET. alpha = 1 specifies L1 regularisation (lasso model), and the penalty factor option gives covariates (edu, age, sex and white) weightings of '0', so are always included in the model (default is 1)
+mod_access_edu_bmi_c <- glmnet(x_hypos_c, data_access_edu_bmi_c$BMI_f7, 
+                             alpha = 1, penalty.factor = (c(0, 0, 0, 0, rep(1, ncol(x_hypos_c) - 4))))
+
+# List the results of this model - Number of vars included, % deviance explained, and lambda value
+mod_access_edu_bmi_c
+
+# Plot these results
+plot(mod_access_edu_bmi_c)
+
+# Look at the variables included at each step
+coef(mod_access_edu_bmi_c, s = max(mod_access_edu_bmi_c$lambda[mod_access_edu_bmi_c$df == 4])); min(mod_access_edu_bmi_c$dev.ratio[mod_access_edu_bmi_c$df == 4])
+
+coef(mod_access_edu_bmi_c, s = max(mod_access_edu_bmi_c$lambda[mod_access_edu_bmi_c$df == 6])); min(mod_access_edu_bmi_c$dev.ratio[mod_access_edu_bmi_c$df == 6])
+
+coef(mod_access_edu_bmi_c, s = max(mod_access_edu_bmi_c$lambda[mod_access_edu_bmi_c$df == 7])); min(mod_access_edu_bmi_c$dev.ratio[mod_access_edu_bmi_c$df == 7])
+
+
+### Visual inspection of results (although just looking at the deviance ratios there doesn't seem to be much of an effect of access to green space at all)
+
+# First, use the 'lasso-table' function defined above to pick out the changes in variables and the increment in deviance ratio
+df <- lasso_table(mod_access_edu_bmi_c)
+df
+
+
+# Make a plot of deviance ratio by lambda value, to show the time variables were entered and the improvement in model fit. This makes it clearer when different variables were added (not the neatest plot, though, as variables bunch up and overlap as lambda approaches 0...). Also, need to be careful about scale of y-axis, as improvement in model fit may not that large.
+plot(mod_access_edu_bmi_c$lambda, mod_access_edu_bmi_c$dev.ratio, type = "l",
+     xlab = "Lambda value", ylab = "Deviance ratio", 
+     xlim = rev(range(mod_access_edu_bmi_c$lambda)), ylim = c(0, max(mod_access_edu_bmi_c$dev.ratio)))
+text(df$Lambda, 0, labels = df$Variables, srt = 90, adj = 0)
+
+## Put lambda on the log scale, else differences between early models inflated, as lambda decreases on log scale. This does make the plot slightly more readable, and groups early-included variables closer together
+mod_access_edu_bmi_c$log_lambda <- log(mod_access_edu_bmi_c$lambda)
+mod_access_edu_bmi_c
+
+df$log_lambda <- log(as.numeric(df$Lambda))
+df
+
+
+# This looks better, although one misleading aspect is that lasso works by initialising the lambda value just above the threshold where no variables are entered (excluding covariates restrained to be in the model). This means that there will always be a 'first' variable entered early in the model, making it seem like this is the best fit to the data. However, because there always *has* to be one variable entered first, it doesn't mean that this is actually predictive of the outcome. In the plot here, even though 'green_inc23' was entered first, the actual model fit improvement over the null/covariate-only model is minimal (0.007% increase in deviance ratio), which is essentially 0, suggesting there is little/no association between access to green space and BMI.
+plot(mod_access_edu_bmi_c$log_lambda, mod_access_edu_bmi_c$dev.ratio, type = "l",
+     xlab = "Log lambda value", ylab = "Deviance ratio", 
+     xlim = rev(range(mod_access_edu_bmi_c$log_lambda)), ylim = c(0.007, max(mod_access_edu_bmi_c$dev.ratio)))
+text(df$log_lambda, 0.007, labels = df$Variables, srt = 90, adj = 0)
+
+# save this plot
+pdf(file = "LogLambdaPlot_accessEduBMI_centrered.pdf", height = 7, width = 11)
+plot(mod_access_edu_bmi_c$log_lambda, mod_access_edu_bmi_c$dev.ratio, type = "l",
+     xlab = "Log lambda value", ylab = "Deviance ratio", 
+     xlim = rev(range(mod_access_edu_bmi_c$log_lambda)), ylim = c(0.007, max(mod_access_edu_bmi_c$dev.ratio)))
+text(df$log_lambda, 0.007, labels = df$Variables, srt = 90, adj = 0)
+dev.off()
+
+
+## From these results, would seem to be that nothing is really going on here (although results are slightly different compared to the uncentered variables) - Will do a likelihood ratio test to see whether inclusion of first parameter(s) added (int2 and green_inc23) increases model fit of standard linear regression model
+base_mod <- lm(data_access_edu_bmi_c$BMI_f7 ~ x_hypos_c[, "age_f7"] + x_hypos_c[, "male"] + x_hypos_c[, "white"] + 
+                 x_hypos_c[, "edu"])
+summary(base_mod)
+
+param1_mod <- lm(data_access_edu_bmi_c$BMI_f7 ~ x_hypos_c[, "age_f7"] + x_hypos_c[, "male"] + x_hypos_c[, "white"] + 
+                   x_hypos_c[, "edu"] + x_hypos_c[, "int2"] + x_hypos_c[, "green_inc23"])
+summary(param1_mod)
+
+# Nope, is pretty much no association here, suggesting no association between access to green space in childhood and BMI at age 7.
+anova(base_mod, param1_mod)
+
+
+## Alternative method using cross-validated lasso to find find 'optimal' model for out-of-sample prediction. Will compare both 'optimal' and '1 SE' models, although the 1 SE model is probably better to avoid overfitting as it selects the best model within 1 SE of the 'optimal' model
+mod.cv <- cv.glmnet(x_hypos_c, data_access_edu_bmi_c$BMI_f7, 
+                    alpha = 1, penalty.factor = (c(0, 0, 0, 0, rep(1, ncol(x_hypos_c) - 4))))
+mod.cv
+
+# Plot the log lambda by MSE to show both 'optimal' and '1SE' models (number of parameters runs along the top of the plot)
+plot(mod.cv) 
+
+# The 1SE model contains just the 4 parameters included by default (age, sex, ethnicity and education), suggesting no association with access to green space exposure
+coef(mod.cv, s = mod.cv$lambda.1se)
+
+# The optimal' model gives the same result (and as this optimal lasso is mainly for prediction, one may expect an increase in model complexity, suggesting again that green space effects are essentially non-existant)
+coef(mod.cv, s = mod.cv$lambda.min)
+
+
+### All methods match up pretty well, and indicate very little association between access to green space in childhood and BMI at age 7 (when controlling for ethnicity and parental education), even when using centered variables to lower collinearity between interaction terms.
+
+
+#### As another sensitivity analysis, will check whether get same results using just 2 time-points (birth and age 7).
 
 data_access2 <- data
 
