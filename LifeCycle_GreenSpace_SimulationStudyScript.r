@@ -1246,6 +1246,19 @@ plot(results$LR_propcorrect, results$CV_propcorrect, pch = 16, xlim = c(0, 100),
      xlab = "% of correct models (LR test)", ylab = "% of correct models (1SE CV lasso)")
 dev.off()
 
+
+# Overall summary of results
+# LR test
+summary(results[, 8:12])
+
+# 1SE method
+summary(results[, 13:17])
+
+# Quick and dirty regression to see which factors are associated with identifying the true model (assuming no interactions here)
+summary(lm(LR_Ncorrect ~ factor(sampleSize) + Exposure + Centered + Collinear + Outcome,
+           data = results))
+
+
 ## Top performing models
 # LR method
 results[order(-results$LR_propcorrect), c(1:10)]
@@ -1346,6 +1359,169 @@ summary(results[results$Exposure == "Binary" & results$Outcome == "Binary", 13:1
 summary(results[results$Exposure == "Binary" & results$Outcome == "Cont", 13:17])
 summary(results[results$Exposure == "Cont" & results$Outcome == "Binary", 13:17])
 summary(results[results$Exposure == "Cont" & results$Outcome == "Cont", 13:17])
+
+
+
+### Testing parameter combination 2 (Sample size = 10000; binary exposure; uncentered; low collinearity; continuous outcome) to explore why it correctly detects crit1 and int1 in all models, but erroneously includes other variables
+
+# Initiate a vector to save results from this simulation to (i.e., whether method identified correct model or not)
+set.seed(1234)
+n_sims <- 1
+
+LR_res_temp <- rep(NA, n_sims)
+LR_res_temp_crit1 <- rep(NA, n_sims) # Store if 'crit1' main effect in final model
+LR_res_temp_int1 <- rep(NA, n_sims) # Store if 'int1' interaction effect in final model
+LR_res_temp_crit1int1 <- rep(NA, n_sims) # Store if 'crit1' and 'int1' in final model
+LR_res_temp_crit1int1extra <- rep(NA, n_sims) # Store if 'crit1' and 'int1', plus extra vars, in final model
+CV_res_temp <- rep(NA, n_sims)
+CV_res_temp_crit1 <- rep(NA, n_sims) # Store if 'crit1' main effect in final model
+CV_res_temp_int1 <- rep(NA, n_sims) # Store if 'int1' interaction effect in final model
+CV_res_temp_crit1int1 <- rep(NA, n_sims) # Store if 'crit1' and 'int1' in final model
+CV_res_temp_crit1int1extra <- rep(NA, n_sims) # Store if 'crit1' and 'int1', plus extra vars, in final model
+
+for (i in 1:n_sims) {
+  
+  print(paste0("Simulation number: ", i))
+  
+  ## Start by simulating the data
+  n <- 10000
+  
+  high_sep <- rbinom(n, 1, 0.5) # SEP - Not caused by anything, so just do 50/50 split (1 = high SEP)
+  green1_p <- plogis(log(0.6) + (log(3) * high_sep)) # First green space exposure in pregnancy
+  green1 <- rbinom(n, 1, green1_p)
+  green2_p <- plogis(log(0.3) + (log(3) * high_sep) + (log(3) * green1)) # Second green space exposure
+  green2 <- rbinom(n, 1, green2_p)
+  green3_p <- plogis(log(0.3) + (log(3) * high_sep) + (log(3) * green2)) # Third green space exposure
+  green3 <- rbinom(n, 1, green3_p)
+  bmi <- 25 + (-4 * high_sep) + (-2 * green1) + (2 * high_sep * green1) + rnorm(n, 0, 3) # Cont. BMI outcome
+  
+  ## Encode the life course hypotheses
+  crit1 <- green1 # Critical period at first time point only
+  #crit1 <- crit1 - mean(crit1) # Center this variable
+  int1 <- crit1 * high_sep # Interaction between SEP and first time point
+  crit2 <- green2 # Critical period at second time point only
+  #crit2 <- crit2 - mean(crit2) # Center this variable
+  int2 <- crit2 * high_sep # Interaction between SEP and second time point
+  crit3 <- green3 # Critical period at third time point only
+  #crit3 <- crit3 - mean(crit3) # Center this variable
+  int3 <- crit3 * high_sep # Interaction between SEP and third time point
+  accumulation <- green1 + green2 + green3 # Linear accumulation of all exposures
+  #accumulation <- accumulation - mean(accumulation) # Center this variable
+  int_accum <- high_sep * accumulation # Interaction between SEP and cumulative exposure
+  green_inc12 <- (1 - green1) * green2 # Increase from time 1 to time 2
+  #green_inc12 <- green_inc12 - mean(green_inc12) # Center this variable
+  green_inc12_int <- green_inc12 * high_sep # Increase from time 1 to time 2, with an interaction with SEP
+  green_dec12 <- (1 - green2) * green1 # Decrease from time 1 to time 2
+  #green_dec12 <- green_dec12 - mean(green_dec12) # Center this variable
+  green_dec12_int <- green_dec12 * high_sep # Decrease from time 1 to time 2, with an interaction with SEP
+  green_inc23 <- (1 - green2) * green3 # Increase from time 2 to time 3
+  #green_inc23 <- green_inc23 - mean(green_inc23) # Center this variable
+  green_inc23_int <- green_inc23 * high_sep # Increase from time 2 to time 3, with an interaction with SEP
+  green_dec23 <- (1 - green3) * green2 # Decrease from time 2 to time 3
+  #green_dec23 <- green_dec23 - mean(green_dec23) # Center this variable
+  green_dec23_int <- green_dec23 * high_sep # Decrease from time 2 to time 3, with an interaction with SEP
+  
+  ## Combine all these into one matrix, including SEP as a confounder
+  x_hypos <- cbind(high_sep, crit1, int1, crit2, int2, crit3, int3, accumulation, int_accum, green_inc12, 
+                   green_inc12_int, green_dec12, green_dec12_int, green_inc23, green_inc23_int, green_dec23,
+                   green_dec23_int)
+  
+  ## Run the model using glmnet
+  mod <- glmnet(x_hypos, bmi, alpha = 1, penalty.factor = (c(0, rep(1, ncol(x_hypos) - 1))))
+  
+  ## Loop over each step of the lasso, running a likelihood ratio test against the previous model when there is a change (skipping the first step, as this is the SEP-only model). Stop this loop when p > 0.05
+  old_covars <- "high_sep" # Set up the SEP-only covariate list
+  x_hypos_old <- as.matrix(x_hypos[, colnames(x_hypos) %in% old_covars]) # Matrix of just baseline SEP covariate
+  p <- 0 # Initialise the p-value to be 0
+  
+  for (j in 2:length(mod$df)) {
+    new_covars <- attributes(which(mod$beta[, j] != 0))$names # Extract the covariates at each time-point
+    
+    # See whether covariates have changed at this step
+    if (setequal(old_covars, new_covars) == FALSE) {
+      x_hypos_new <- x_hypos[, colnames(x_hypos) %in% new_covars] # Matrix of the covariates in updated lasso
+      
+      # See whether these new covariates improve model fit
+      mod_old <- lm(bmi ~ x_hypos_old)
+      mod_new <- lm(bmi ~ x_hypos_new)
+      p <- as.data.frame(anova(mod_old, mod_new))[2, 6] # Extracting the p-value from the LR test
+      
+      # If p-value is > 0.05, exit the loop (or if p is NA, which can happen if the old and new model have the same number of parameters)
+      if (p > 0.05 | is.na(p)) {
+        break
+      }
+      
+      # Update the covariate list and the 'old' covariate matrix
+      x_hypos_old <- x_hypos_new
+      old_covars <- new_covars
+    }
+    
+    # Again, if p-value is > 0.05, exit the loop
+    if (p > 0.05 | is.na(p)) {
+      break
+    }
+    
+  }
+  
+  # Print the covariates in the best-fitting LR model
+  print(paste0("LR covariates:"))
+  print(old_covars)
+  
+  ## See whether this matches the 'true' model, and code as 0 if not and 1 if so (or NA if unable to calculate p-value)
+  LR_res_temp[i] <- ifelse(setequal(old_covars, target_covars) == TRUE, 1, 0)
+  LR_res_temp[i] <- ifelse(is.na(p), NA, LR_res_temp[i])
+  
+  # Store if 'crit1', 'int1' and both in final model
+  LR_res_temp_crit1[i] <- ifelse("crit1" %in% old_covars == TRUE, 1, 0)
+  LR_res_temp_crit1[i] <- ifelse(is.na(p), NA, LR_res_temp_crit1[i])
+  
+  LR_res_temp_int1[i] <- ifelse("int1" %in% old_covars == TRUE, 1, 0)
+  LR_res_temp_int1[i] <- ifelse(is.na(p), NA, LR_res_temp_int1[i])
+  
+  LR_res_temp_crit1int1[i] <- ifelse("crit1" %in% old_covars == TRUE & "int1" %in% old_covars == TRUE, 1, 0)
+  LR_res_temp_crit1int1[i] <- ifelse(is.na(p), NA, LR_res_temp_crit1int1[i])
+  
+  LR_res_temp_crit1int1extra[i] <- ifelse(LR_res_temp_crit1int1[i] == 1 & LR_res_temp[i] == 0, 1, 0)
+  LR_res_temp_crit1int1extra[i] <- ifelse(is.na(p), NA, LR_res_temp_crit1int1extra[i])
+  
+  
+  ### Next, want to summarise the 1SE cross-validated lasso model, and see whether that corresponds to the correct model or not
+  mod.cv <- cv.glmnet(x_hypos, bmi, alpha = 1, penalty.factor = (c(0, rep(1, ncol(x_hypos) - 1))))
+  
+  # Extract the non-zero covariates into a vector
+  cv_covars_temp <- as.matrix(coef(mod.cv, s = mod.cv$lambda.1se))
+  cv_covars_temp <- as.matrix(cv_covars_temp[!rownames(cv_covars_temp) %in% "(Intercept)", ]) # Drop the intercept
+  cv_covars_temp <- cv_covars_temp[cv_covars_temp != 0, ] # Drop all zero coefficients
+  
+  cv_covars <- attributes(cv_covars_temp)$names # Store all the non-zero hypotheses
+  
+  # Print the covariates in the best-fitting cross-validated model
+  print(paste0("CV covariates:"))
+  print(cv_covars)
+  print("")
+  
+  ## See whether this matches the 'true' model, and code as 0 if not and 1 if so
+  CV_res_temp[i] <- ifelse(setequal(cv_covars, target_covars) == TRUE, 1, 0)
+  
+  # Store if 'crit1', 'int1' and both in final model
+  CV_res_temp_crit1[i] <- ifelse("crit1" %in% cv_covars == TRUE, 1, 0)
+  CV_res_temp_int1[i] <- ifelse("int1" %in% cv_covars == TRUE, 1, 0)
+  CV_res_temp_crit1int1[i] <- ifelse("crit1" %in% cv_covars == TRUE & "int1" %in% cv_covars == TRUE, 1, 0)
+  CV_res_temp_crit1int1extra[i] <- ifelse(CV_res_temp_crit1int1[i] == 1 & CV_res_temp[i] == 0, 1, 0)
+  
+}
+
+
+## Ah, so here, the final model also includes 'green_dec12'. This is because this variable gets added after crit1 but before int1 (where 'green_dec12' *is* associated with the outcome), so does not get removed before 'int1' gets added to the model; but once 'int1' gets included, there is no association between 'green_dec12' and the outcome. but gets included in the final model regardless.
+summary(mod_old)
+
+coef(mod, s = max(mod$lambda[mod$df == 2])); min(mod$dev.ratio[mod$df == 2])
+coef(mod, s = max(mod$lambda[mod$df == 3])); min(mod$dev.ratio[mod$df == 3])
+coef(mod, s = max(mod$lambda[mod$df == 4])); min(mod$dev.ratio[mod$df == 4])
+
+summary(lm(bmi ~ x_hypos[, "high_sep"] + x_hypos[, "crit1"]))
+summary(lm(bmi ~ x_hypos[, "high_sep"] + x_hypos[, "crit1"] + x_hypos[, "green_dec12"]))
+summary(lm(bmi ~ x_hypos[, "high_sep"] + x_hypos[, "crit1"] + x_hypos[, "green_dec12"] + x_hypos[, "int1"]))
 
 
 
@@ -1965,6 +2141,19 @@ pdf(file = "LRbyCV_simulationResults_noChangeVars.pdf", height = 5, width = 7)
 plot(results_reduced$LR_propcorrect, results_reduced$CV_propcorrect, pch = 16, xlim = c(0, 100), ylim = c(0, 100), 
      xlab = "% of correct models (LR test)", ylab = "% of correct models (1SE CV lasso)")
 dev.off()
+
+
+# Overall summary of results
+# LR test
+summary(results_reduced[, 8:12])
+
+# 1SE method
+summary(results_reduced[, 13:17])
+
+# Quick and dirty regression to see which factors are associated with identifying the true model (assuming no interactions here)
+summary(lm(LR_Ncorrect ~ factor(sampleSize) + Exposure + Centered + Collinear + Outcome,
+           data = results_reduced))
+
 
 ## Top performing models
 # LR method
