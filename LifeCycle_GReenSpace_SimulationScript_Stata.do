@@ -6,7 +6,7 @@
 
 *** Previous work has detailed a structured approach to life course modelling for both binary exposures (Smith et al., 2015: https://journals.lww.com/epidem/Fulltext/2015/09000/Model_Selection_of_the_Effect_of_Binary_Exposures.15.aspx) and continuous exposures with confounding (Smith et al., 2016: https://academic.oup.com/ije/article/45/4/1271/2951966?login=true) using LARS/lasso methods. Building on these approaches, we aim to demonstrate here how interactions can be incorporated into these models. 
 
-** However, we will not be using the LARS/covariance test method here, as: 1) there are issues with the covariance test and it is no longer recommended; and 2) Using the LARS method, it is possible to 'force' continuous confounders to be included in the model, however, this does not appear possible for binary/categorical variables, especially if we want to include them as interaction terms. So here we will focus on using ordinary lasso models via glmnet, rather than the LARS method. Rather than being a stepwise procedure like LARS, this approach gradually increases the lambda value and lets more variables into the model; this can make it difficult to assess when adding a new covariate does or does not improve model fit. Interpretation is therefore more subjective, based on inspection of the improvement in the deviance ratio (a measure of goodness-of-fit similar to R2).
+** However, we will not be using the LARS/covariance test method here, as: 1) there are issues with the covariance test and it is no longer recommended; and 2) Using the LARS method, it is possible to 'force' continuous confounders to be included in the model, however, this does not appear possible for binary/categorical variables (or it's not easy, at least), especially if we want to include them as interaction terms. So here we will focus on using ordinary lasso models via glmnet, rather than the LARS method. Rather than being a stepwise procedure like LARS, this approach gradually increases the lambda value and lets more variables into the model; this can make it difficult to assess when adding a new covariate does or does not improve model fit. Interpretation is therefore more subjective, based on inspection of the improvement in the deviance ratio (a measure of goodness-of-fit similar to R2).
 
 ** To interpret these results, we will focus on three approaches:
 **  - 1) Using a 'subjective' approach looking at the order in which hypotheses were entered into the model, combined with a plot of deviance/variance explained when each predictor was added, and making judgement based on these sources of information
@@ -259,21 +259,10 @@ lassoinfo
 ****************************************************************************************
 **** Example life course model with confounders and interactions, but with a binary outcome
 
-*** Create the binary 'overweight' outcome - Will use the same model as for BMI - Overweight caused by SEP (higher SEP = lower probability of being overweight), plus interaction with green1 (lower SEP and access to green space = lower chances of being overweight compared to lower SEP and no access to green space). Assuming no main effect of green1 here.
-set seed 3930
-
-gen overweight = .
-replace overweight = rbinomial(1, 0.1) if high_sep == 1 & green1 == 1
-replace overweight = rbinomial(1, 0.1) if high_sep == 1 & green1 == 0
-replace overweight = rbinomial(1, 0.3) if high_sep == 0 & green1 == 1
-replace overweight = rbinomial(1, 0.5) if high_sep == 0 & green1 == 0
+*** Create the binary 'overweight' outcome - For simplicity here, will just recode the 'bmi' variable into overweight or not, based on a BMI > 25 or not.
+gen overweight = 0
+replace overweight = 1 if bmi > 25
 tab overweight
-
-tab overweight green1
-tab overweight high_sep
-
-** descriptive stats split by possible combinations of SEP and green1 to check simulation worked
-table high_sep green1, stat(mean overweight)
 
 * Check the 'true' model, which is SEP as confounder, interaction with green 1, and main effect of green 1. green2 and green3 should also be null. Yup, model works as expected and interaction model better fit than non-interaction model
 logistic overweight high_sep green1 green2 green3
@@ -292,18 +281,18 @@ lrtest A B
 lasso logit overweight (high_sep) crit1-green_dec23_int, selection(none)
 est store sim
 
-** Summarise these results - The first variable included was green1, but then the second variables included were the interaction term between SEP and green1 (which is correct), but also the 'assumulation' hypothesis (which is incorrect).
+** Summarise these results - The first variable included was crit1, and then the second variable included was the interaction term between SEP and green1 ('int1'; which is also correct). The next variable added after was 'green_dec12_int', although the improvement in model fit seems minimal. So it would appear that this method has identified the true model (although given the reduction in power when using binary outcomes, the correct model may not always be identified; see the full simulation results for more details)
 lassoknots
 
 lassoselect id = 2
 lassocoef, display(coef, penalized eform) nolegend
 lassogof
 
-lassoselect id = 15
+lassoselect id = 18
 lassocoef, display(coef, penalized eform) nolegend
 lassogof
 
-lassoselect id = 37
+lassoselect id = 28
 lassocoef, display(coef, penalized eform) nolegend
 lassogof
 
@@ -315,7 +304,7 @@ coefpath
 
 *** 1) Visual inspection
 
-** The lassoknots command gives the steps of the lasso, along with the lambda value, the number of non-zero coefficients, R-squared value, and the variables added/dropped to the model (option 'all' displays all steps, while the default only gives steps when variables were added/removed).
+** The lassoknots command gives the steps of the lasso, along with the lambda value, the number of non-zero coefficients, in-sample deviance ratio, and the variables added/dropped to the model (option 'all' displays all steps, while the default only gives steps when variables were added/removed).
 lassoknots
 lassoknots, all
 
@@ -335,25 +324,25 @@ est store param1
 lrtest base param1
 
 
-** Next, compare the model including the next hypotheses added (int1 and accumulation)
+** Next, compare the model including the next hypotheses added (int1)
 est restore sim
 lassoknots
 
-logistic overweight high_sep crit1 int1 accumulation
+logistic overweight high_sep crit1 int1
 est store param2
 
-* Adding the SEP by crit1 interaction term and accumulation terms again improves model fit (however, the 'accumlation' term was not strongly associated with the outcome, while the 'int1' interaction term was)
+* Adding the SEP by crit1 interaction term term again improves model fit
 lrtest param1 param2
 
 
-** Does adding the next parameters (int_accum, green_inc12 and green_inc23) improve model fit?
+** Does adding the next parameters (green_dec12_int) improve model fit?
 est restore sim
 lassoknots
 
-logistic overweight high_sep crit1 int1 accumulation int_accum green_inc12 green_inc23
+logistic overweight high_sep crit1 int1 green_dec12_int
 est store param3
 
-* No real improvement in model fit
+* No improvement in model fit
 lrtest param2 param3
 
 estimates clear
@@ -364,7 +353,7 @@ estimates clear
 ** Specify the 1SE rule first
 lasso logit overweight (high_sep) crit1-green_dec23_int, selection(cv, folds(10) serule) rseed(3932)
 
-* Display results - Note that this method does not include any additional variable on top of high_sep, so does not include 'crit1' or 'int1' and therefore is far too conservative and does not select the correct model.
+* Display results - Note that this method only includes the variable 'crit1' variable in addition to high_sep, so does not include 'crit1' and therefore is too conservative and does not select the correct model.
 lassoknots
 lassocoef, display(coef, penalized eform) nolegend
 lassogof
@@ -376,14 +365,14 @@ cvplot
 ** Now for 'optimal' lambda value based on cross-validation function (CV mean prediction error)
 lasso logit overweight (high_sep) crit1-green_dec23_int, selection(cv, folds(10)) rseed(3932)
 
-* Display results - This method includes 4 variables in addition to high_sep (crit1, int1 and accumulation), so is somewhat too liberal and also does not specify the correct model (although it is closer to the 'truth' than the 1SE model)
+* Display results - This method includes 7 variables in addition to high_sep and crit1, so is somewhat too liberal and also does not specify the correct model
 lassoknots
 lassocoef, display(coef, penalized eform) nolegend
 lassogof
 lassoinfo
 
 
-**** Summary: The methods seem to broadly give similar answers, although none of the methods identifies the true model correctly. These lassos incorrectly include both 'int1' and 'accumulation' at the same time, while the 1SE cross-validated lasso does not include any hypotheses beyond the 'high_sep' confounder/covariate. This highlights that we need to use multiple methods to 'triangulate' results which are consistent with each method, and that interpretation is rather qualitative rather than quantative/definitive.
+**** Summary: When using a binary outcome, the methods give slightly less consistent answers compared to when using continuous outcomes, and do not always identify the true model (likely due to power issues when using binary outcomes; see for formal simulation study results for a more detailed exploration). For instance, the visual inspection and likelihood ratio test methods both included the correct variables 'crit1' and 'int1', while the 1SE cross-validated lasso model only identified the 'crit1' term in the final model; interpretation therefore should be made on a qualitative judgement taking information from all these methods into consideration, rather than just one.
 
 
 

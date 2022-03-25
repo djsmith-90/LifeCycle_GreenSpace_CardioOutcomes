@@ -6,7 +6,7 @@
 
 ### Previous work has detailed a structured approach to life course modelling for both binary exposures (Smith et al., 2015: https://journals.lww.com/epidem/Fulltext/2015/09000/Model_Selection_of_the_Effect_of_Binary_Exposures.15.aspx) and continuous exposures with confounding (Smith et al., 2016: https://academic.oup.com/ije/article/45/4/1271/2951966?login=true) using LARS/lasso methods. Building on these approaches, we aim to demonstrate here how interactions can be incorporated into these models. 
 
-## However, we will not be using the LARS/covariance test method here, as: 1) there are issues with the covariance test and it is no longer recommended; and 2) Using the LARS method, it is possible to 'force' continuous confounders to be included in the model, however, this does not appear possible for binary/categorical variables, especially if we want to include them as interaction terms. So here we will focus on using ordinary lasso models via glmnet, rather than the LARS method. Rather than being a stepwise procedure like LARS, this approach gradually increases the lambda value and lets more variables into the model; this can make it difficult to assess when adding a new covariate does or does not improve model fit. Interpretation is therefore more subjective, based on inspection of the improvement in the deviance ratio (a measure of goodness-of-fit similar to R2).
+## However, we will not be using the LARS/covariance test method here, as: 1) there are issues with the covariance test and it is no longer recommended; and 2) Using the LARS method, it is possible to 'force' continuous confounders to be included in the model, however, this does not appear possible for binary/categorical variables (or it's not easy, at least), especially if we want to include them as interaction terms. So here we will focus on using ordinary lasso models via glmnet, rather than the LARS method. Rather than being a stepwise procedure like LARS, this approach gradually increases the lambda value and lets more variables into the model; this can make it difficult to assess when adding a new covariate does or does not improve model fit. Interpretation is therefore more subjective, based on inspection of the improvement in the deviance ratio (a measure of goodness-of-fit similar to R2).
 
 ## To interpret these results, we will focus on three approaches:
 ##  - 1) Using a 'subjective' approach looking at the order in which hypotheses were entered into the model, combined with a plot of deviance/variance explained when each predictor was added, and making judgement based on these sources of information
@@ -393,24 +393,9 @@ dev.off()
 ###################################################################################################################
 #### Example life course model with confounders and interactions, but with a binary outcome
 
-### Create the binary 'overweight' outcome - Will use the same model as for BMI - Overweight caused by SEP (higher SEP = lower probability of being overweight), plus interaction with green1 (lower SEP and access to green space = lower chances of being overweight compared to lower SEP and no access to green space). Assuming no main effect of green1 here.
-set.seed(3930)
-
-overweight <- NA
-overweight[high_sep == 1 & green1 == 1] <- rbinom(sum(high_sep == 1 & green1 == 1), 1, 0.1)
-overweight[high_sep == 1 & green1 == 0] <- rbinom(sum(high_sep == 1 & green1 == 0), 1, 0.1)
-overweight[high_sep == 0 & green1 == 1] <- rbinom(sum(high_sep == 0 & green1 == 1), 1, 0.3)
-overweight[high_sep == 0 & green1 == 0] <- rbinom(sum(high_sep == 0 & green1 == 0), 1, 0.5)
-table(overweight, useNA = "ifany")
-
-table(overweight, green1)
-table(overweight, high_sep)
-
-## descriptive stats split by possible combinations of SEP and green1 to check simulation worked
-mean(overweight[high_sep == 1 & green1 == 1]) # High SEP and access to green space in preg - Low prob of overweight
-mean(overweight[high_sep == 1 & green1 == 0]) # High SEP and no access to green space in preg - Low prob of overweight
-mean(overweight[high_sep == 0 & green1 == 1]) # Low SEP and access to green space in preg - Middle prob of overweight
-mean(overweight[high_sep == 0 & green1 == 0]) # Low SEP and no access to green space in preg - High prob of overweight
+### Create the binary 'overweight' outcome - For simplicity here, will just recode the 'bmi' variable into overweight or not, based on a BMI > 25 or not.
+overweight <- ifelse(bmi > 25, 1, 0)
+table(overweight)
 
 # Check the 'true' model, which is SEP as confounder, interaction with green 1, and main effect of green 1. green2 and green3 should also be null. Yup, model works as expected and interaction model better fit than non-interaction model
 summary(glm(overweight ~ high_sep + green1 + green2 + green3, family = "binomial"))
@@ -436,11 +421,11 @@ plot(mod.binary)
 # Look at the variables included at each step (first model is the baseline SEP-only model)
 coef(mod.binary, s = max(mod.binary$lambda[mod.binary$df == 1])); min(mod.binary$dev.ratio[mod.binary$df == 1])
 coef(mod.binary, s = max(mod.binary$lambda[mod.binary$df == 2])); min(mod.binary$dev.ratio[mod.binary$df == 2])
-coef(mod.binary, s = max(mod.binary$lambda[mod.binary$df == 3])); min(mod.binary$dev.ratio[mod.binary$df == 3])
+#coef(mod.binary, s = max(mod.binary$lambda[mod.binary$df == 3])); min(mod.binary$dev.ratio[mod.binary$df == 3])
 coef(mod.binary, s = max(mod.binary$lambda[mod.binary$df == 4])); min(mod.binary$dev.ratio[mod.binary$df == 4])
 coef(mod.binary, s = max(mod.binary$lambda[mod.binary$df == 5])); min(mod.binary$dev.ratio[mod.binary$df == 5])
 
-# The first variable included was green1, and then the second variable included was the interaction term between SEP and green1, which is correct, as this is how we coded the data.
+# The first variable included was green1, and then the second variables included were the interaction term between SEP and green1 (which is correct), but also the 'green_inc12_int' term, which is incorrect, meaning that this method does not appear to have identified the true model. This is likely because we are using a binary outcome, which reduces the power of the analysis to detect the correct model (see the more formal simulation study for additional details and verification)
 
 
 #### Will explore a few methods to check whether we get the right result and do not include any other incorrect parameters in the 'best' model
@@ -539,7 +524,7 @@ mod
 df$log_lambda <- log(as.numeric(df$Lambda))
 df
 
-# This looks better, as now clearer that 'crit1' and 'int1' were entered first. However, need to be aware of the deviance ratio scale (as mentioned above). Here, once 'crit1' is added the deviance ratio increases a little (~1%), after which 'int1' is added, and the deviance ratio increases by around another ~0.3% until the next variable is entered in the model (green_dec12), after which the deviance ratio does not increase by very much. This suggests that 'crit1' and 'int1' in combination explain most of the variation in the outcome BMI attributable to the life-course hypotheses, and that these variables are associated with the outcome (again, just as we simulated). Although unlike with the continuous outcome example above, the deviance ratios/variance explained by these 'crit1' and 'int1' variables is quite a bit weaker here with this binary outcome.
+# This looks better, as now clearer that 'crit1' was entered first, followed by 'int1' and 'green_inc12_int' (the latter is which is incorrect, as the true model should just contain 'crit1' and 'int1'). As also need to be aware of the deviance ratio scale (as mentioned above). Here, once 'crit1' is added the deviance ratio increases a little (~1.5%), after which 'int1' and 'green_inc12_int' are added, and the deviance ratio increases by around another ~0.3% until the next variable is entered in the model (green_dec23_int), after which the deviance ratio does not increase by very much. This suggests that 'crit1', 'int1' and 'green_inc12_int' in combination explain most of the variation in the outcome BMI attributable to the life-course hypotheses, and that these variables are associated with the outcome. However, unlike with the continuous outcome example above, the deviance ratios/variance explained by these variables is quite a bit weaker here with this binary outcome, and the model does not identify the true combination of parameters that we simulated.
 plot(mod.binary$log_lambda, mod.binary$dev.ratio, type = "l",
      xlab = "Log lambda value", ylab = "Deviance ratio", 
      xlim = rev(range(mod.binary$log_lambda)), ylim = c(0.1, max(mod.binary$dev.ratio)))
@@ -570,24 +555,26 @@ summary(param1.binary)
 anova(base.binary, param1.binary, test = "Chisq")
 
 
-## Next, compare the model including the next hypotheses added (int1)
+## Next, compare the model including the next hypotheses added (int1 and green_inc12_int)
 coef(mod.binary, s = max(mod.binary$lambda[mod.binary$df == 3])); min(mod.binary$dev.ratio[mod.binary$df == 3])
+coef(mod.binary, s = max(mod.binary$lambda[mod.binary$df == 4])); min(mod.binary$dev.ratio[mod.binary$df == 4])
 
-param2.binary <- glm(overweight ~ x_hypos[, "high_sep"] + x_hypos[, "crit1"] + x_hypos[, "int1"], family = "binomial")
+param2.binary <- glm(overweight ~ x_hypos[, "high_sep"] + x_hypos[, "crit1"] + x_hypos[, "int1"] + 
+                       x_hypos[, "green_inc12_int"], family = "binomial")
 summary(param2.binary)
 
-# Adding the SEP by crit1 interaction term again improves model fit
+# Adding the SEP by crit1 interaction term and green_inc12_int parameters again improves model fit. However, looking at the parameter coefficients we can see that only the 'int1' interaction term is associated with the outcome, while the 'green_inc12_int' term is not.
 anova(param1.binary, param2.binary, test = "Chisq")
 
 
-## Does adding the next parameter (green_dec12) improve model fit?
-coef(mod.binary, s = max(mod.binary$lambda[mod.binary$df == 4])); min(mod.binary$dev.ratio[mod.binary$df == 4])
+## Does adding the next parameter (green_dec23_int) improve model fit?
+coef(mod.binary, s = max(mod.binary$lambda[mod.binary$df == 5])); min(mod.binary$dev.ratio[mod.binary$df == 5])
 
 param3.binary <- glm(overweight ~ x_hypos[, "high_sep"] + x_hypos[, "crit1"] + x_hypos[, "int1"] + 
-                       x_hypos[, "green_dec12"], family = "binomial")
+                       x_hypos[, "green_inc12_int"] + x_hypos[, "green_dec23_int"], family = "binomial")
 summary(param3.binary)
 
-# No improvement in model fit (as expected)
+# No improvement in model fit
 anova(param2.binary, param3.binary, test = "Chisq")
 
 
@@ -600,10 +587,10 @@ mod.cv.binary
 
 plot(mod.cv.binary) # Plot the log lambda by MSE to show both 'optimal' and '1SE' models (number of parameters runs along the top of the plot)
 
-# Here, this 1SE model contains 3 parameters (SEP confounder, crit1 and int1 term), so identifies the correct model (however, note that these methods are quite sensitive, and if we change the set.seed number, either when simulating the data or before running the cross-validated model, we may get different results; for instance, if the seed number above the CV lasso is set to 3932 rather than 3931, the number of terms in the 1SE model reduces to 2 [high_sep and crit1 only]. The 1SE model may therefore be too conservative, especially when effect sizes are relatively small)
+# Here, this 1SE model contains only 2 parameters (SEP confounder and crit1), so does not identify the correct model as it excludes the 'int1' interaction term. This is likely due to reduced power with using a binary outcome, plus potentially the 1SE cross-validated lasso model being too conservative (see the full simulation study for a more dtaield exploration)
 coef(mod.cv.binary, s = mod.cv.binary$lambda.1se)
 
-# The optimal' model contains 5 parameters, so does not correct identify the correct model (but as this optimal lasso is mainly for prediction, this increase in complexity is to be expected as the model hooks on to random noise in the data)
+# The optimal' model contains 8 parameters, so does not correct identify the correct model (but as this optimal lasso is mainly for prediction, this increase in complexity is to be expected as the model hooks on to random noise in the data)
 coef(mod.cv.binary, s = mod.cv.binary$lambda.min)
 
 # Save this plot
@@ -612,6 +599,6 @@ plot(mod.cv.binary)
 dev.off()
 
 
-#### Summary: All of the methods seem to match up well, give consistent answers, and identify the true model correctly. However, this may not always be the case, given that results do appear quite sensitive to random variation and different starting seeds/conditions (this is also exemplified in the accompanying Stata example script, where different methods - especially for cross-validated lasso and binary outcomes - do not always identify the true model); interpretation therefore should be made on a qualitative judgement taking information from all these methods into consideration, rather than just one.
+#### Summary: When using a binary outcome, the methods give slightly less consistent answers compared to when using continuous outcomes, and do not always identify the true model. For instance, the visual inspection and likelihood ratio test methods both included the correct variables 'crit1' and 'int1', but erroneously included an additional variable. On the other hand, the 1SE cross-validated lasso model only identified the 'crit1' term in the final model; interpretation therefore should be made on a qualitative judgement taking information from all these methods into consideration, rather than just one.
 
 
