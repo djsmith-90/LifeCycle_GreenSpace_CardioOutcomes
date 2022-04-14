@@ -324,7 +324,7 @@ summary(green3)
 cor(green1, green2)
 cor(green2, green3)
 
-# Now for continuous BMI outcome - Caused by SEP (higher SEP = lower BMI), plus interaction with green1 (lower SEP and access to green space = lower BMI compared to lower SEP and no access to green space). Assuming no main effect of green1 here. Have chosen 'green1' parameter to be 0.02 increase in BMI per unit increase in green space, as the green1 standard deviation is ~50, and two times this should cover most of the variation in green space distance, making parameters broadly comparable to to binary green space effect of 2 BMI units (see: Gelman, A. (2008). Scaling regression inputs by dividing by two standard deviations. Statistics in medicine, 27(15), 2865-2873.)
+# Now for continuous BMI outcome - Caused by SEP (higher SEP = lower BMI), plus interaction with green1 (lower SEP and access to green space = lower BMI compared to lower SEP and no access to green space). Assuming no main effect of green1 here. Have chosen 'green1' parameter to be 0.02 BMI per unit increase in green space, as the green1 standard deviation is ~50, and two times this should cover most of the variation in green space distance, making results broadly comparable to the binary green space effect of 2 BMI units (see: Gelman, A. (2008). Scaling regression inputs by dividing by two standard deviations. Statistics in medicine, 27(15), 2865-2873.)
 bmi <- 25 + (-4 * high_sep) + (-0.02 * green1) + (0.02 * high_sep * green1) + rnorm(n, 0, 3)
 summary(bmi)
 

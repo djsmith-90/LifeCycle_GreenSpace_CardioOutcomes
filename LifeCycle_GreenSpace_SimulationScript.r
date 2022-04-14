@@ -321,7 +321,7 @@ plot(mod$log_lambda, mod$dev.ratio, type = "l",
 text(df$log_lambda, 0.2, labels = df$Variables, srt = 90, adj = 0)
 
 # save this plot
-pdf(file = "LogLambdaPlot_simulation.pdf", height = 7, width = 11)
+pdf(file = "LogLambdaPlot_simulation.pdf", height = 6, width = 10)
 plot(mod$log_lambda, mod$dev.ratio, type = "l",
      xlab = "Log lambda value", ylab = "Deviance ratio", 
      xlim = rev(range(mod$log_lambda)), ylim = c(0.2, max(mod$dev.ratio)))
@@ -380,7 +380,7 @@ coef(mod.cv, s = mod.cv$lambda.1se)
 coef(mod.cv, s = mod.cv$lambda.min)
 
 # Save this plot
-pdf(file = "CVLasso_simulation.pdf", height = 7, width = 11)
+pdf(file = "CVLasso_simulation.pdf", height = 5, width = 8)
 plot(mod.cv)
 dev.off()
 

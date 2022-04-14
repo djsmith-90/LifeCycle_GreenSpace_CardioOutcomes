@@ -1,6 +1,6 @@
 ### LifeCycle Green Space Analysis - ALSPAC analysis script
 
-## Created 27/1/2021 by Dan Major-Smith
+## Created 27/1/2022 by Dan Major-Smith
 ## R version 4.0.4
 
 
@@ -16,6 +16,10 @@ library(glmnet)
 
 #install.packages("dagitty")
 library(dagitty)
+
+## For the sankey plots (also know as 'alluvial' plots, will use the package 'ggalluvial' - see: https://cran.r-project.org/web/packages/ggalluvial/vignettes/ggalluvial.html)
+#install.packages("ggalluvial")
+library(ggalluvial)
 
 
 # Set working directory
@@ -223,6 +227,7 @@ data <- data %>%
 
 table(data$overweight, useNA = "ifany")
 prop.table(table(data$overweight)) * 100
+prop.table(table(data$overweight, useNA = "ifany")) * 100
 
 ## Systolic and diastolic blood pressure
 summary(data$f7sa021); summary(data$f7sa022)
@@ -280,6 +285,52 @@ table(data$greenSpace_combo, useNA = "ifany")
 prop.table(table(data$greenSpace_combo)) * 100
 
 table(data$greenSpace_combo[!is.na(data$BMI_f7)])
+
+## Turn this date into a sankey plot - To do this, first convert the data to summary wide format, then convert to long/lode format.
+data_temp_green <- data %>%
+  select(greenSpace_preg, greenSpace_4, greenSpace_7) %>%
+  filter(complete.cases(greenSpace_preg, greenSpace_4, greenSpace_7)) %>%
+  mutate(greenSpace_preg = as.factor(greenSpace_preg)) %>%
+  mutate(greenSpace_preg = recode(greenSpace_preg, "0" = "No", "1" = "Yes")) %>%
+  mutate(greenSpace_preg = factor(greenSpace_preg, levels = c("Yes", "No"))) %>%
+  mutate(greenSpace_4 = as.factor(greenSpace_4)) %>%
+  mutate(greenSpace_4 = recode(greenSpace_4, "0" = "No", "1" = "Yes")) %>%
+  mutate(greenSpace_4 = factor(greenSpace_4, levels = c("Yes", "No"))) %>%
+  mutate(greenSpace_7 = as.factor(greenSpace_7)) %>%
+  mutate(greenSpace_7 = recode(greenSpace_7, "0" = "No", "1" = "Yes")) %>%
+  mutate(greenSpace_7 = factor(greenSpace_7, levels = c("Yes", "No"))) %>%
+  group_by(greenSpace_preg, greenSpace_4, greenSpace_7) %>%
+  summarise(freq = n())
+
+summary(data_temp_green)
+head(data_temp_green)
+
+data_temp_lodes_green <- to_lodes_form(data_temp_green, axes = 1:3, id = "traj")
+data_temp_lodes_green <- data_temp_lodes_green %>%
+  rename(time = x, Response = stratum)
+head(data_temp_lodes_green)
+summary(data_temp_lodes_green)
+
+sankey_green <- ggplot(data_temp_lodes_green,
+                      aes(x = time, stratum = Response, alluvium = traj,
+                          y = freq,
+                          fill = Response, label = Response)) +
+  scale_x_discrete(expand = c(.1, .1)) +
+  geom_flow() +
+  geom_stratum(alpha = .5) +
+  geom_text(stat = "stratum", size = 3) +
+  theme_bw() +
+  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank()) +
+  theme(legend.position = "none") +
+  xlab("Time-point") + ylab("Frequency")
+
+sankey_green
+
+# Save this plot
+pdf("sankey_green.pdf", height = 6, width = 10)
+plot(sankey_green)
+dev.off()
+
 
 # All possible combinations have some cell counts, but some are very small (e.g., only 22 people have the pattern 0-1-0) - This drops even more (to 10) if restrict to children with F@7 BMI data... This *might* just about be enough to work with, but will also use just 2 time-points (pregnancy and age 7) to ensure sufficient sample sizes and see if get same pattern of results
 data <- data %>%
@@ -402,6 +453,52 @@ table(data$garden_combo, useNA = "ifany")
 prop.table(table(data$garden_combo)) * 100
 
 table(data$garden_combo[!is.na(data$BMI_f7)])
+
+## Turn this date into a sankey plot - To do this, first convert the data to summary wide format, then convert to long/lode format.
+data_temp_garden <- data %>%
+  select(garden_preg, garden_4, garden_7) %>%
+  filter(complete.cases(garden_preg, garden_4, garden_7)) %>%
+  mutate(garden_preg = as.factor(garden_preg)) %>%
+  mutate(garden_preg = recode(garden_preg, "0" = "No", "1" = "Yes")) %>%
+  mutate(garden_preg = factor(garden_preg, levels = c("Yes", "No"))) %>%
+  mutate(garden_4 = as.factor(garden_4)) %>%
+  mutate(garden_4 = recode(garden_4, "0" = "No", "1" = "Yes")) %>%
+  mutate(garden_4 = factor(garden_4, levels = c("Yes", "No"))) %>%
+  mutate(garden_7 = as.factor(garden_7)) %>%
+  mutate(garden_7 = recode(garden_7, "0" = "No", "1" = "Yes")) %>%
+  mutate(garden_7 = factor(garden_7, levels = c("Yes", "No"))) %>%
+  group_by(garden_preg, garden_4, garden_7) %>%
+  summarise(freq = n())
+
+summary(data_temp_garden)
+head(data_temp_garden)
+
+data_temp_lodes_garden <- to_lodes_form(data_temp_garden, axes = 1:3, id = "traj")
+data_temp_lodes_garden <- data_temp_lodes_garden %>%
+  rename(time = x, Response = stratum)
+head(data_temp_lodes_garden)
+summary(data_temp_lodes_garden)
+
+sankey_garden <- ggplot(data_temp_lodes_garden,
+                       aes(x = time, stratum = Response, alluvium = traj,
+                           y = freq,
+                           fill = Response, label = Response)) +
+  scale_x_discrete(expand = c(.1, .1)) +
+  geom_flow() +
+  geom_stratum(alpha = .5) +
+  geom_text(stat = "stratum", size = 3) +
+  theme_bw() +
+  theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank()) +
+  theme(legend.position = "none") +
+  xlab("Time-point") + ylab("Frequency")
+
+sankey_garden
+
+# Save this plot
+pdf("sankey_garden.pdf", height = 6, width = 10)
+plot(sankey_garden)
+dev.off()
+
 
 # All possible combinations have some cell counts, but some are very small (e.g., only 6 people have the pattern 0-1-0) - This drops even more (to 3) if restrict to children with F@7 BMI data... This *might* just about be enough to work with, but will also use just 2 time-points (pregnancy and age 7) to ensure sufficient sample sizes and see if get same pattern of results
 data <- data %>%
@@ -529,55 +626,63 @@ table(data$edu, useNA = "ifany")
 data_access <- data
 
 
-## Start with education as the SEP covariate/interaction term
+## Start with education as the SEP covariate/interaction term (to try and reduce the correlation between the hypotheses and the interaction terms and improve power, will center all these hypotheses)
 
 # Critical period at first time point only
 data_access$crit1 <- data_access$greenSpace_preg
+data_access$crit1 <- data_access$crit1 - mean(data_access$crit1, na.rm = TRUE)
 
 # Interaction between SEP and first time point
-data_access$int1 <- data_access$edu * data_access$greenSpace_preg
+data_access$int1 <- data_access$edu * data_access$crit1
 
 # Critical period at second time point only
 data_access$crit2 <- data_access$greenSpace_4
+data_access$crit2 <- data_access$crit2 - mean(data_access$crit2, na.rm = TRUE)
 
 # Interaction between SEP and second time point
-data_access$int2 <- data_access$edu * data_access$greenSpace_4
+data_access$int2 <- data_access$edu * data_access$crit2
 
 # Critical period at third time point only
 data_access$crit3 <- data_access$greenSpace_7
+data_access$crit3 <- data_access$crit3 - mean(data_access$crit3, na.rm = TRUE)
 
 # Interaction between SEP and third time point
-data_access$int3 <- data_access$edu * data_access$greenSpace_7
+data_access$int3 <- data_access$edu * data_access$crit3
 
 # Linear accumulation of all exposures
 data_access$accumulation <- data_access$greenSpace_preg + data_access$greenSpace_4 + data_access$greenSpace_7
+data_access$accumulation <- data_access$accumulation - mean(data_access$accumulation, na.rm = TRUE)
 
 # Interaction between SEP and cumulative exposure
 data_access$int_accum <- data_access$edu * data_access$accumulation
 
 # Increase in access to green space from time 1 to time 2
 data_access$green_inc12 <- (1 - data_access$greenSpace_preg) * data_access$greenSpace_4
+data_access$green_inc12 <- data_access$green_inc12 - mean(data_access$green_inc12, na.rm = TRUE)
 
 # Increase in access to green space from time 1 to time 2, with an interaction with SEP
-data_access$green_inc12_int <- (1 - data_access$greenSpace_preg) * data_access$greenSpace_4 * data_access$edu
+data_access$green_inc12_int <- data_access$green_inc12 * data_access$edu
 
 # Decrease in access to green space from time 1 to time 2
 data_access$green_dec12 <- (1 - data_access$greenSpace_4) * data_access$greenSpace_preg
+data_access$green_dec12 <- data_access$green_dec12 - mean(data_access$green_dec12, na.rm = TRUE)
 
 # Decrease in access to green space from time 1 to time 2, with an interaction with SEP
-data_access$green_dec12_int <- (1 - data_access$greenSpace_4) * data_access$greenSpace_preg * data_access$edu
+data_access$green_dec12_int <- data_access$green_dec12 * data_access$edu
 
 # Increase in access to green space from time 2 to time 3
 data_access$green_inc23 <- (1 - data_access$greenSpace_4) * data_access$greenSpace_7
+data_access$green_inc23 <- data_access$green_inc23 - mean(data_access$green_inc23, na.rm = TRUE)
 
 # Increase in access to green space from time 2 to time 3, with an interaction with SEP
-data_access$green_inc23_int <- (1 - data_access$greenSpace_4) * data_access$greenSpace_7 * data_access$edu
+data_access$green_inc23_int <- data_access$green_inc23 * data_access$edu
 
 # Decrease in access to green space from time 2 to time 3
 data_access$green_dec23 <- (1 - data_access$greenSpace_7) * data_access$greenSpace_4
+data_access$green_dec23 <- data_access$green_dec23 - mean(data_access$green_dec23, na.rm = TRUE)
 
 # Decrease in access to green space from time 2 to time 3, with an interaction with SEP
-data_access$green_dec23_int <- (1 - data_access$greenSpace_7) * data_access$greenSpace_4 * data_access$edu
+data_access$green_dec23_int <- data_access$green_dec23 * data_access$edu
 
 
 ## Make a dataset just with the outcomes, exposure hypotheses and covariates
@@ -611,7 +716,7 @@ cor(x_hypos[,5:20])
 cor(x_hypos[,5:20]) > 0.9
 cor(x_hypos[,5:20]) > 0.95
 
-# Biggest issues are with the accumulation variables, which are highly correlated with the critical period variables, so will drop these accumulation variables from these analysis due to collinearity and effectively measuring the same thing.
+# Biggest issues is with the accumulation variable, which is highly correlated with the critical period variables, so will drop this accumulation variable (and its SEP-interaction term) from these analysis due to collinearity and effectively measuring the same thing. After centering, the critical period interaction terms were no longer highly-correlated (r<0.9).
 x_hypos <- x_hypos[,!colnames(x_hypos) %in% c("accumulation", "int_accum")]
 head(x_hypos)
 
@@ -628,18 +733,6 @@ mod_access_edu_bmi <- glmnet(x_hypos, data_access_edu_bmi$BMI_f7,
 # List the results of this model - Number of vars included, % deviance explained, and lambda value
 mod_access_edu_bmi
 
-# Plot these results
-plot(mod_access_edu_bmi)
-
-# Look at the variables included at each step
-coef(mod_access_edu_bmi, s = max(mod_access_edu_bmi$lambda[mod_access_edu_bmi$df == 4])); min(mod_access_edu_bmi$dev.ratio[mod_access_edu_bmi$df == 4])
-
-coef(mod_access_edu_bmi, s = max(mod_access_edu_bmi$lambda[mod_access_edu_bmi$df == 5])); min(mod_access_edu_bmi$dev.ratio[mod_access_edu_bmi$df == 5])
-
-coef(mod_access_edu_bmi, s = max(mod_access_edu_bmi$lambda[mod_access_edu_bmi$df == 6])); min(mod_access_edu_bmi$dev.ratio[mod_access_edu_bmi$df == 6])
-
-coef(mod_access_edu_bmi, s = max(mod_access_edu_bmi$lambda[mod_access_edu_bmi$df == 7])); min(mod_access_edu_bmi$dev.ratio[mod_access_edu_bmi$df == 7])
-
 
 ### Visual inspection of results (although just looking at the deviance ratios there doesn't seem to be much of an effect of access to green space at all)
 
@@ -647,29 +740,19 @@ coef(mod_access_edu_bmi, s = max(mod_access_edu_bmi$lambda[mod_access_edu_bmi$df
 df <- lasso_table(mod_access_edu_bmi)
 df
 
-
-# Make a plot of deviance ratio by lambda value, to show the time variables were entered and the improvement in model fit. This makes it clearer when different variables were added (not the neatest plot, though, as variables bunch up and overlap as lambda approaches 0...). Also, need to be careful about scale of y-axis, as improvement in model fit may not that large.
-plot(mod_access_edu_bmi$lambda, mod_access_edu_bmi$dev.ratio, type = "l",
-     xlab = "Lambda value", ylab = "Deviance ratio", 
-     xlim = rev(range(mod_access_edu_bmi$lambda)), ylim = c(0, max(mod_access_edu_bmi$dev.ratio)))
-text(df$Lambda, 0, labels = df$Variables, srt = 90, adj = 0)
-
 ## Put lambda on the log scale, else differences between early models inflated, as lambda decreases on log scale. This does make the plot slightly more readable, and groups early-included variables closer together
 mod_access_edu_bmi$log_lambda <- log(mod_access_edu_bmi$lambda)
-mod_access_edu_bmi
-
 df$log_lambda <- log(as.numeric(df$Lambda))
 df
 
-
-# This looks better, although one misleading aspect is that lasso works by initialising the lambda value just above the threshold where no variables are entered (excluding covariates restrained to be in the model). This means that there will always be a 'first' variable entered early in the model, making it seem like this is the best fit to the data. However, because there always *has* to be one variable entered first, it doesn't mean that this is actually predictive of the outcome. In the plot here, even though 'green_inc23' was entered first, the actual model fit improvement over the null/covariate-only model is minimal (0.007% increase in deviance ratio), which is essentially 0, suggesting there is little/no association between access to green space and BMI.
+# Make the plot
 plot(mod_access_edu_bmi$log_lambda, mod_access_edu_bmi$dev.ratio, type = "l",
      xlab = "Log lambda value", ylab = "Deviance ratio", 
      xlim = rev(range(mod_access_edu_bmi$log_lambda)), ylim = c(0.007, max(mod_access_edu_bmi$dev.ratio)))
 text(df$log_lambda, 0.007, labels = df$Variables, srt = 90, adj = 0)
 
 # save this plot
-pdf(file = "LogLambdaPlot_accessEduBMI.pdf", height = 7, width = 11)
+pdf(file = "LogLambdaPlot_accessEduBMI.pdf", height = 6, width = 10)
 plot(mod_access_edu_bmi$log_lambda, mod_access_edu_bmi$dev.ratio, type = "l",
      xlab = "Log lambda value", ylab = "Deviance ratio", 
      xlim = rev(range(mod_access_edu_bmi$log_lambda)), ylim = c(0.007, max(mod_access_edu_bmi$dev.ratio)))
@@ -677,13 +760,13 @@ text(df$log_lambda, 0.007, labels = df$Variables, srt = 90, adj = 0)
 dev.off()
 
 
-## From these results, would seem to be that nothing is really going on here - Will do a likelihood ratio test to see whether inclusion of first parameter added (green_inc23) increases model fit of standard linear regression model
+## From these results, would seem to be that nothing is really going on here - Will do a likelihood ratio test to see whether inclusion of first parameters added (int2 and green_inc23) increases model fit of standard linear regression model
 base_mod <- lm(data_access_edu_bmi$BMI_f7 ~ x_hypos[, "age_f7"] + x_hypos[, "male"] + x_hypos[, "white"] + 
                  x_hypos[, "edu"])
 summary(base_mod)
 
 param1_mod <- lm(data_access_edu_bmi$BMI_f7 ~ x_hypos[, "age_f7"] + x_hypos[, "male"] + x_hypos[, "white"] + 
-                 x_hypos[, "edu"] + x_hypos[, "green_inc23"])
+                 x_hypos[, "edu"] + x_hypos[, "int2"] + x_hypos[, "green_inc23"])
 summary(param1_mod)
 
 # Nope, is pretty much no association here, suggesting no association between access to green space in childhood and BMI at age 7.
@@ -708,231 +791,47 @@ coef(mod.cv, s = mod.cv$lambda.min)
 ### All methods match up pretty well, and indicate very little association between access to green space in childhood and BMI at age 7 (when controlling for ethnicity and parental education).
 
 
-#### As a sensitivity analysis, will try centering all the exposures before constructing the hypotheses, as this should reduce the correlations between the interaction terms (and give the model extra power to detect the true effect)
-data_access_c <- data
-summary(data_access_c)
 
-
-## Encode the hypotheses, with education as the SEP covariate/interaction term, and then centering the variables afterwards
-
-# Critical period at first time point only
-data_access_c$crit1 <- data_access_c$greenSpace_preg
-data_access_c$crit1 <- data_access_c$crit1 - mean(data_access_c$crit1, na.rm = TRUE)
-
-# Interaction between SEP and first time point
-data_access_c$int1 <- data_access_c$crit1 * data_access_c$edu
-
-# Critical period at second time point only
-data_access_c$crit2 <- data_access_c$greenSpace_4
-data_access_c$crit2 <- data_access_c$crit2 - mean(data_access_c$crit2, na.rm = TRUE)
-
-# Interaction between SEP and second time point
-data_access_c$int2 <- data_access_c$crit2 * data_access_c$edu
-
-# Critical period at third time point only
-data_access_c$crit3 <- data_access_c$greenSpace_7
-data_access_c$crit3 <- data_access_c$crit3 - mean(data_access_c$crit3, na.rm = TRUE)
-
-# Interaction between SEP and third time point
-data_access_c$int3 <- data_access_c$crit3 * data_access_c$edu
-
-# Linear accumulation of all exposures
-data_access_c$accumulation <- data_access_c$greenSpace_preg + data_access_c$greenSpace_4 +  data_access_c$greenSpace_7
-data_access_c$accumulation <- data_access_c$accumulation - mean(data_access_c$accumulation, na.rm = TRUE)
-
-# Interaction between SEP and cumulative exposure
-data_access_c$int_accum <- data_access_c$edu * data_access_c$accumulation
-
-# Increase in access to green space from time 1 to time 2
-data_access_c$green_inc12 <- (1 - data_access_c$greenSpace_preg) * data_access_c$greenSpace_4
-data_access_c$green_inc12 <- data_access_c$green_inc12 - mean(data_access_c$green_inc12, na.rm = TRUE)
-
-# Increase in access to green space from time 1 to time 2, with an interaction with SEP
-data_access_c$green_inc12_int <- data_access_c$green_inc12 * data_access_c$edu
-
-# Decrease in access to green space from time 1 to time 2
-data_access_c$green_dec12 <- (1 - data_access_c$greenSpace_4) * data_access_c$greenSpace_preg
-data_access_c$green_dec12 <- data_access_c$green_dec12 - mean(data_access_c$green_dec12, na.rm = TRUE)
-
-# Decrease in access to green space from time 1 to time 2, with an interaction with SEP
-data_access_c$green_dec12_int <- data_access_c$green_dec12 * data_access_c$edu
-
-# Increase in access to green space from time 2 to time 3
-data_access_c$green_inc23 <- (1 - data_access_c$greenSpace_4) * data_access_c$greenSpace_7
-data_access_c$green_inc23 <- data_access_c$green_inc23 - mean(data_access_c$green_inc23, na.rm = TRUE)
-
-# Increase in access to green space from time 2 to time 3, with an interaction with SEP
-data_access_c$green_inc23_int <- data_access_c$green_inc23 * data_access_c$edu
-
-# Decrease in access to green space from time 2 to time 3
-data_access_c$green_dec23 <- (1 - data_access_c$greenSpace_7) * data_access_c$greenSpace_4
-data_access_c$green_dec23 <- data_access_c$green_dec23 - mean(data_access_c$green_dec23, na.rm = TRUE)
-
-# Decrease in access to green space from time 2 to time 3, with an interaction with SEP
-data_access_c$green_dec23_int <- data_access_c$green_dec23 * data_access_c$edu
-
-
-## Make a dataset just with the outcomes, exposure hypotheses and covariates
-data_access_edu_c <- data_access_c %>%
-  select(BMI_f7, overweight, sysBP, diaBP, 
-         age_f7, male, white, edu, 
-         crit1, int1, crit2, int2, crit3, int3, accumulation, int_accum, green_inc12, green_inc12_int, 
-         green_dec12, green_dec12_int, green_inc23, green_inc23_int, green_dec23, green_dec23_int)
-
-
-## Now analyse the BMI outcome
-
-# Reduce dataset down to just complete cases
-data_access_edu_bmi_c <- data_access_edu_c %>%
-  select(-overweight, -sysBP, -diaBP) %>%
-  filter(complete.cases(BMI_f7, age_f7, male, white, edu, crit1, int1))
-
-summary(data_access_edu_bmi_c)
-nrow(data_access_edu_bmi_c)
-
-# Save the life-course hypotheses and covariates as a matrix
-x_hypos_c <- data_access_edu_bmi_c %>%
-  select(-BMI_f7)
-
-x_hypos_c <- as.matrix(x_hypos_c)
-
-
-## Check correlation matrix of all these hypotheses (>0.9 would be a cause for concern)
-dim(x_hypos_c)
-cor(x_hypos_c[,5:20])
-cor(x_hypos_c[,5:20]) > 0.9
-cor(x_hypos_c[,5:20]) > 0.95
-
-# Centering the variables has helped lower the correlation between the critical period interaction terms, so now none are >0.9. Accumulation is still highly correlated with the critical period variables, so will drop these accumulation variables from these analysis due to collinearity and effectively measuring the same thing.
-x_hypos_c <- x_hypos_c[,!colnames(x_hypos_c) %in% c("accumulation", "int_accum")]
-head(x_hypos_c)
-
-dim(x_hypos_c)
-cor(x_hypos_c[,5:18])
-cor(x_hypos_c[,5:18]) > 0.9
-cor(x_hypos_c[,5:18]) > 0.95
-
-
-## Run the Lasso model using GLMNET. alpha = 1 specifies L1 regularisation (lasso model), and the penalty factor option gives covariates (edu, age, sex and white) weightings of '0', so are always included in the model (default is 1)
-mod_access_edu_bmi_c <- glmnet(x_hypos_c, data_access_edu_bmi_c$BMI_f7, 
-                             alpha = 1, penalty.factor = (c(0, 0, 0, 0, rep(1, ncol(x_hypos_c) - 4))))
-
-# List the results of this model - Number of vars included, % deviance explained, and lambda value
-mod_access_edu_bmi_c
-
-# Plot these results
-plot(mod_access_edu_bmi_c)
-
-# Look at the variables included at each step
-coef(mod_access_edu_bmi_c, s = max(mod_access_edu_bmi_c$lambda[mod_access_edu_bmi_c$df == 4])); min(mod_access_edu_bmi_c$dev.ratio[mod_access_edu_bmi_c$df == 4])
-
-coef(mod_access_edu_bmi_c, s = max(mod_access_edu_bmi_c$lambda[mod_access_edu_bmi_c$df == 6])); min(mod_access_edu_bmi_c$dev.ratio[mod_access_edu_bmi_c$df == 6])
-
-coef(mod_access_edu_bmi_c, s = max(mod_access_edu_bmi_c$lambda[mod_access_edu_bmi_c$df == 7])); min(mod_access_edu_bmi_c$dev.ratio[mod_access_edu_bmi_c$df == 7])
-
-
-### Visual inspection of results (although just looking at the deviance ratios there doesn't seem to be much of an effect of access to green space at all)
-
-# First, use the 'lasso-table' function defined above to pick out the changes in variables and the increment in deviance ratio
-df <- lasso_table(mod_access_edu_bmi_c)
-df
-
-
-# Make a plot of deviance ratio by lambda value, to show the time variables were entered and the improvement in model fit. This makes it clearer when different variables were added (not the neatest plot, though, as variables bunch up and overlap as lambda approaches 0...). Also, need to be careful about scale of y-axis, as improvement in model fit may not that large.
-plot(mod_access_edu_bmi_c$lambda, mod_access_edu_bmi_c$dev.ratio, type = "l",
-     xlab = "Lambda value", ylab = "Deviance ratio", 
-     xlim = rev(range(mod_access_edu_bmi_c$lambda)), ylim = c(0, max(mod_access_edu_bmi_c$dev.ratio)))
-text(df$Lambda, 0, labels = df$Variables, srt = 90, adj = 0)
-
-## Put lambda on the log scale, else differences between early models inflated, as lambda decreases on log scale. This does make the plot slightly more readable, and groups early-included variables closer together
-mod_access_edu_bmi_c$log_lambda <- log(mod_access_edu_bmi_c$lambda)
-mod_access_edu_bmi_c
-
-df$log_lambda <- log(as.numeric(df$Lambda))
-df
-
-
-# This looks better, although one misleading aspect is that lasso works by initialising the lambda value just above the threshold where no variables are entered (excluding covariates restrained to be in the model). This means that there will always be a 'first' variable entered early in the model, making it seem like this is the best fit to the data. However, because there always *has* to be one variable entered first, it doesn't mean that this is actually predictive of the outcome. In the plot here, even though 'green_inc23' was entered first, the actual model fit improvement over the null/covariate-only model is minimal (0.007% increase in deviance ratio), which is essentially 0, suggesting there is little/no association between access to green space and BMI.
-plot(mod_access_edu_bmi_c$log_lambda, mod_access_edu_bmi_c$dev.ratio, type = "l",
-     xlab = "Log lambda value", ylab = "Deviance ratio", 
-     xlim = rev(range(mod_access_edu_bmi_c$log_lambda)), ylim = c(0.007, max(mod_access_edu_bmi_c$dev.ratio)))
-text(df$log_lambda, 0.007, labels = df$Variables, srt = 90, adj = 0)
-
-# save this plot
-pdf(file = "LogLambdaPlot_accessEduBMI_centrered.pdf", height = 7, width = 11)
-plot(mod_access_edu_bmi_c$log_lambda, mod_access_edu_bmi_c$dev.ratio, type = "l",
-     xlab = "Log lambda value", ylab = "Deviance ratio", 
-     xlim = rev(range(mod_access_edu_bmi_c$log_lambda)), ylim = c(0.007, max(mod_access_edu_bmi_c$dev.ratio)))
-text(df$log_lambda, 0.007, labels = df$Variables, srt = 90, adj = 0)
-dev.off()
-
-
-## From these results, would seem to be that nothing is really going on here (although results are slightly different compared to the uncentered variables) - Will do a likelihood ratio test to see whether inclusion of first parameter(s) added (int2 and green_inc23) increases model fit of standard linear regression model
-base_mod <- lm(data_access_edu_bmi_c$BMI_f7 ~ x_hypos_c[, "age_f7"] + x_hypos_c[, "male"] + x_hypos_c[, "white"] + 
-                 x_hypos_c[, "edu"])
-summary(base_mod)
-
-param1_mod <- lm(data_access_edu_bmi_c$BMI_f7 ~ x_hypos_c[, "age_f7"] + x_hypos_c[, "male"] + x_hypos_c[, "white"] + 
-                   x_hypos_c[, "edu"] + x_hypos_c[, "int2"] + x_hypos_c[, "green_inc23"])
-summary(param1_mod)
-
-# Nope, is pretty much no association here, suggesting no association between access to green space in childhood and BMI at age 7.
-anova(base_mod, param1_mod)
-
-
-## Alternative method using cross-validated lasso to find find 'optimal' model for out-of-sample prediction. Will compare both 'optimal' and '1 SE' models, although the 1 SE model is probably better to avoid overfitting as it selects the best model within 1 SE of the 'optimal' model
-mod.cv <- cv.glmnet(x_hypos_c, data_access_edu_bmi_c$BMI_f7, 
-                    alpha = 1, penalty.factor = (c(0, 0, 0, 0, rep(1, ncol(x_hypos_c) - 4))))
-mod.cv
-
-# Plot the log lambda by MSE to show both 'optimal' and '1SE' models (number of parameters runs along the top of the plot)
-plot(mod.cv) 
-
-# The 1SE model contains just the 4 parameters included by default (age, sex, ethnicity and education), suggesting no association with access to green space exposure
-coef(mod.cv, s = mod.cv$lambda.1se)
-
-# The optimal' model gives the same result (and as this optimal lasso is mainly for prediction, one may expect an increase in model complexity, suggesting again that green space effects are essentially non-existant)
-coef(mod.cv, s = mod.cv$lambda.min)
-
-
-### All methods match up pretty well, and indicate very little association between access to green space in childhood and BMI at age 7 (when controlling for ethnicity and parental education), even when using centered variables to lower collinearity between interaction terms.
-
-
-#### As another sensitivity analysis, will check whether get same results using just 2 time-points (birth and age 7).
+#### As a sensitivity analysis, will check whether get same results using just 2 time-points (birth and age 7).
 
 data_access2 <- data
 
-## Encode the hypotheses
+## Encode the hypotheses (and center variables)
 
 # Critical period at first time point only
 data_access2$crit1 <- data_access2$greenSpace_preg
+data_access2$crit1 <- data_access2$crit1 - mean(data_access2$crit1, na.rm = TRUE)
 
 # Interaction between SEP and first time point
-data_access2$int1 <- data_access2$edu * data_access2$greenSpace_preg
+data_access2$int1 <- data_access2$edu * data_access2$crit1
 
 # Critical period at second time point only
 data_access2$crit2 <- data_access2$greenSpace_7
+data_access2$crit2 <- data_access2$crit2 - mean(data_access2$crit2, na.rm = TRUE)
 
 # Interaction between SEP and second time point
-data_access2$int2 <- data_access2$edu * data_access2$greenSpace_7
+data_access2$int2 <- data_access2$edu * data_access2$crit2
 
 # Linear accumulation of all exposures
 data_access2$accumulation <- data_access2$greenSpace_preg + data_access2$greenSpace_7
+data_access2$accumulation <- data_access2$accumulation - mean(data_access2$accumulation, na.rm = TRUE)
 
 # Interaction between SEP and cumulative exposure
 data_access2$int_accum <- data_access2$edu * data_access2$accumulation
 
 # Increase in access to green space from time 1 to time 2
 data_access2$green_inc12 <- (1 - data_access2$greenSpace_preg) * data_access2$greenSpace_7
+data_access2$green_inc12 <- data_access2$green_inc12 - mean(data_access2$green_inc12, na.rm = TRUE)
 
 # Increase in access to green space from time 1 to time 2, with an interaction with SEP
-data_access2$green_inc12_int <- (1 - data_access2$greenSpace_preg) * data_access2$greenSpace_7 * data_access2$edu
+data_access2$green_inc12_int <- data_access2$green_inc12 * data_access2$edu
 
 # Decrease in access to green space from time 1 to time 2
 data_access2$green_dec12 <- (1 - data_access2$greenSpace_7) * data_access2$greenSpace_preg
+data_access2$green_dec12 <- data_access2$green_dec12 - mean(data_access2$green_dec12, na.rm = TRUE)
 
 # Decrease in access to green space from time 1 to time 2, with an interaction with SEP
-data_access2$green_dec12_int <- (1 - data_access2$greenSpace_7) * data_access2$greenSpace_preg * data_access2$edu
+data_access2$green_dec12_int <- data_access2$green_dec12 * data_access2$edu
 
 
 ## Make a dataset just with the outcomes, exposure hypotheses and covariates
@@ -981,11 +880,6 @@ mod_access_edu_bmi2 <- glmnet(x_hypos2, data_access2_edu_bmi$BMI_f7,
 
 mod_access_edu_bmi2
 
-# Look at model coefficients
-coef(mod_access_edu_bmi2, s = max(mod_access_edu_bmi2$lambda[mod_access_edu_bmi2$df == 4])); min(mod_access_edu_bmi2$dev.ratio[mod_access_edu_bmi2$df == 4])
-
-coef(mod_access_edu_bmi2, s = max(mod_access_edu_bmi2$lambda[mod_access_edu_bmi2$df == 6])); min(mod_access_edu_bmi2$dev.ratio[mod_access_edu_bmi2$df == 6])
-
 
 ### Visual inspection of results (although just looking at the deviance ratios there doesn't seem to be much of an effect of access to green space at all)
 
@@ -994,28 +888,19 @@ df <- lasso_table(mod_access_edu_bmi2)
 df
 
 
-# Make a plot of deviance ratio by lambda value, to show the time variables were entered and the improvement in model fit.
-plot(mod_access_edu_bmi2$lambda, mod_access_edu_bmi2$dev.ratio, type = "l",
-     xlab = "Lambda value", ylab = "Deviance ratio", 
-     xlim = rev(range(mod_access_edu_bmi2$lambda)), ylim = c(0, max(mod_access_edu_bmi2$dev.ratio)))
-text(df$Lambda, 0, labels = df$Variables, srt = 90, adj = 0)
-
 ## Put lambda on the log scale, else differences between early models inflated, as lambda decreases on log scale. This does make the plot slightly more readable, and groups early-included variables closer together
 mod_access_edu_bmi2$log_lambda <- log(mod_access_edu_bmi2$lambda)
-mod_access_edu_bmi2
-
 df$log_lambda <- log(as.numeric(df$Lambda))
 df
 
-
-# This looks better, although one misleading aspect is that lasso works by initialising the lambda value just above the threshold where no variables are entered (excluding covariates restrained to be in the model). This means that there will always be a 'first' variable entered early in the model, making it seem like this is the best fit to the data. However, because there always *has* to be one variable entered first, it doesn't mean that this is actually predictive of the outcome. In the plot here, even though 'green_inc23' was entered first, the actual model fit improvement over the null/covariate-only model is minimal (0.007% increase in deviance ratio), which is essentially 0, suggesting there is little/no association between access to green space and BMI.
+# Make the plot
 plot(mod_access_edu_bmi2$log_lambda, mod_access_edu_bmi2$dev.ratio, type = "l",
      xlab = "Log lambda value", ylab = "Deviance ratio", 
      xlim = rev(range(mod_access_edu_bmi2$log_lambda)), ylim = c(0.008, max(mod_access_edu_bmi2$dev.ratio)))
 text(df$log_lambda, 0.008, labels = df$Variables, srt = 90, adj = 0)
 
 # save this plot
-pdf(file = "LogLambdaPlot_accessEduBMI_2Exposures.pdf", height = 7, width = 11)
+pdf(file = "LogLambdaPlot_accessEduBMI_2Exposures.pdf", height = 6, width = 10)
 plot(mod_access_edu_bmi2$log_lambda, mod_access_edu_bmi2$dev.ratio, type = "l",
      xlab = "Log lambda value", ylab = "Deviance ratio", 
      xlim = rev(range(mod_access_edu_bmi2$log_lambda)), ylim = c(0.008, max(mod_access_edu_bmi2$dev.ratio)))
@@ -1023,7 +908,7 @@ text(df$log_lambda, 0.008, labels = df$Variables, srt = 90, adj = 0)
 dev.off()
 
 
-# Increase in model fit when first variables entered is again minimal (0.003% compared to baseline), suggesting little association - Get same conclusion if use LR test or cross-validated lasso
+# Increase in model fit when first variables entered is again minimal, suggesting little association - Get same conclusion if use LR test or cross-validated lasso
 (mod_access_edu_bmi2$dev.ratio[2] - mod_access_edu_bmi2$dev.ratio[1]) * 100
 
 base_mod2 <- lm(data_access2_edu_bmi$BMI_f7 ~ x_hypos2[, "age_f7"] + x_hypos2[, "male"] + x_hypos2[, "white"] + 
@@ -1031,7 +916,7 @@ base_mod2 <- lm(data_access2_edu_bmi$BMI_f7 ~ x_hypos2[, "age_f7"] + x_hypos2[, 
 summary(base_mod2)
 
 param1_mod2 <- lm(data_access2_edu_bmi$BMI_f7 ~ x_hypos2[, "age_f7"] + x_hypos2[, "male"] + x_hypos2[, "white"] + 
-                   x_hypos2[, "edu"] + x_hypos2[, "crit2"]  + x_hypos2[, "int2"])
+                   x_hypos2[, "edu"] + x_hypos2[, "int2"])
 summary(param1_mod2)
 
 anova(base_mod2, param1_mod2)
@@ -1044,6 +929,7 @@ mod.cv2
 
 coef(mod.cv2, s = mod.cv2$lambda.1se)
 coef(mod.cv2, s = mod.cv2$lambda.min)
+
 
 
 #### Next, will explore binary access to green space exposure, with education as covariate/interaction term, and binary overweight variable as the outcome
@@ -1078,27 +964,12 @@ mod_access_edu_over
 # Plot these results
 plot(mod_access_edu_over)
 
-# Look at the variables included at each step
-coef(mod_access_edu_over, s = max(mod_access_edu_over$lambda[mod_access_edu_over$df == 4])); min(mod_access_edu_over$dev.ratio[mod_access_edu_over$df == 4])
 
-coef(mod_access_edu_over, s = max(mod_access_edu_over$lambda[mod_access_edu_over$df == 6])); min(mod_access_edu_over$dev.ratio[mod_access_edu_over$df == 6])
-
-coef(mod_access_edu_over, s = max(mod_access_edu_over$lambda[mod_access_edu_over$df == 7])); min(mod_access_edu_over$dev.ratio[mod_access_edu_over$df == 7])
-
-
-### Visual inspection of results (although just looking at the deviance ratios there doesn't seem to be much of an effect of access to green space at all)
+### Visual inspection of results 
 
 # First, use the 'lasso-table' function defined above to pick out the changes in variables and the increment in deviance ratio
 df <- lasso_table(mod_access_edu_over)
 df
-
-
-# Make a plot of deviance ratio by lambda value, to show the time variables were entered and the improvement in model fit. Need to be careful about scale of y-axis, as improvement in model fit may not that large.
-plot(mod_access_edu_over$lambda, mod_access_edu_over$dev.ratio, type = "l",
-     xlab = "Lambda value", ylab = "Deviance ratio", 
-     xlim = rev(range(mod_access_edu_over$lambda)), ylim = c(0, max(mod_access_edu_over$dev.ratio)))
-text(df$Lambda, 0, labels = df$Variables, srt = 90, adj = 0)
-
 
 ## Put lambda on the log scale, else differences between early models inflated, as lambda decreases on log scale. This does make the plot slightly more readable, and groups early-included variables closer together
 mod_access_edu_over$log_lambda <- log(mod_access_edu_over$lambda)
@@ -1107,14 +978,14 @@ mod_access_edu_over
 df$log_lambda <- log(as.numeric(df$Lambda))
 df
 
-# This looks better, although same issues as above re. interpreting the first variable added (doesn't mean is a strong predictor of outcome).
+# Make plot
 plot(mod_access_edu_over$log_lambda, mod_access_edu_over$dev.ratio, type = "l",
      xlab = "Log lambda value", ylab = "Deviance ratio", 
      xlim = rev(range(mod_access_edu_over$log_lambda)), ylim = c(0.001, max(mod_access_edu_over$dev.ratio)))
 text(df$log_lambda, 0.001, labels = df$Variables, srt = 90, adj = 0)
 
 # save this plot
-pdf(file = "LogLambdaPlot_accessEduOverweight.pdf", height = 7, width = 11)
+pdf(file = "LogLambdaPlot_accessEduOverweight.pdf", height = 6, width = 10)
 plot(mod_access_edu_over$log_lambda, mod_access_edu_over$dev.ratio, type = "l",
      xlab = "Log lambda value", ylab = "Deviance ratio", 
      xlim = rev(range(mod_access_edu_over$log_lambda)), ylim = c(0.001, max(mod_access_edu_over$dev.ratio)))
@@ -1184,29 +1055,11 @@ mod_access_edu_sysBP
 # Plot these results
 plot(mod_access_edu_sysBP)
 
-# Look at the variables included at each step
-coef(mod_access_edu_sysBP, s = max(mod_access_edu_sysBP$lambda[mod_access_edu_sysBP$df == 4])); min(mod_access_edu_sysBP$dev.ratio[mod_access_edu_sysBP$df == 4])
-
-coef(mod_access_edu_sysBP, s = max(mod_access_edu_sysBP$lambda[mod_access_edu_sysBP$df == 5])); min(mod_access_edu_sysBP$dev.ratio[mod_access_edu_sysBP$df == 5])
-
-coef(mod_access_edu_sysBP, s = max(mod_access_edu_sysBP$lambda[mod_access_edu_sysBP$df == 6])); min(mod_access_edu_sysBP$dev.ratio[mod_access_edu_sysBP$df == 6])
-
-coef(mod_access_edu_sysBP, s = max(mod_access_edu_sysBP$lambda[mod_access_edu_sysBP$df == 7])); min(mod_access_edu_sysBP$dev.ratio[mod_access_edu_sysBP$df == 7])
-
-
 ### Visual inspection of results (although just looking at the deviance ratios there doesn't seem to be much of an effect of access to green space at all)
 
 # First, use the 'lasso-table' function defined above to pick out the changes in variables and the increment in deviance ratio
 df <- lasso_table(mod_access_edu_sysBP)
 df
-
-
-# Make a plot of deviance ratio by lambda value, to show the time variables were entered and the improvement in model fit. Need to be careful about scale of y-axis, as improvement in model fit may not that large.
-plot(mod_access_edu_sysBP$lambda, mod_access_edu_sysBP$dev.ratio, type = "l",
-     xlab = "Lambda value", ylab = "Deviance ratio", 
-     xlim = rev(range(mod_access_edu_sysBP$lambda)), ylim = c(0, max(mod_access_edu_sysBP$dev.ratio)))
-text(df$Lambda, 0, labels = df$Variables, srt = 90, adj = 0)
-
 
 ## Put lambda on the log scale, else differences between early models inflated, as lambda decreases on log scale. This does make the plot slightly more readable, and groups early-included variables closer together
 mod_access_edu_sysBP$log_lambda <- log(mod_access_edu_sysBP$lambda)
@@ -1215,14 +1068,14 @@ mod_access_edu_sysBP
 df$log_lambda <- log(as.numeric(df$Lambda))
 df
 
-# This looks better, although same issues as above re. interpreting the first variable added (doesn't mean is a strong predictor of outcome).
+# Make the plot
 plot(mod_access_edu_sysBP$log_lambda, mod_access_edu_sysBP$dev.ratio, type = "l",
      xlab = "Log lambda value", ylab = "Deviance ratio", 
      xlim = rev(range(mod_access_edu_sysBP$log_lambda)), ylim = c(0.005, max(mod_access_edu_sysBP$dev.ratio)))
 text(df$log_lambda, 0.005, labels = df$Variables, srt = 90, adj = 0)
 
 # save this plot
-pdf(file = "LogLambdaPlot_accessEduSysBP.pdf", height = 7, width = 11)
+pdf(file = "LogLambdaPlot_accessEduSysBP.pdf", height = 6, width = 10)
 plot(mod_access_edu_sysBP$log_lambda, mod_access_edu_sysBP$dev.ratio, type = "l",
      xlab = "Log lambda value", ylab = "Deviance ratio", 
      xlim = rev(range(mod_access_edu_sysBP$log_lambda)), ylim = c(0.005, max(mod_access_edu_sysBP$dev.ratio)))
@@ -1230,16 +1083,16 @@ text(df$log_lambda, 0.005, labels = df$Variables, srt = 90, adj = 0)
 dev.off()
 
 
-## From these results, would seem to be that nothing is really going on here - Will do a likelihood ratio test to see whether inclusion of first parameter(s) added (green_dec12) increases model fit of standard linear regression model
+## From these results, would seem to be that nothing is really going on here - Will do a likelihood ratio test to see whether inclusion of first parameter(s) added (int3 and green_dec12) increases model fit of standard linear regression model
 base_mod <- lm(data_access_edu_sysBP$sysBP ~ x_hypos[, "age_f7"] + x_hypos[, "male"] + x_hypos[, "white"] + 
                   x_hypos[, "edu"])
 summary(base_mod)
 
 param1_mod <- lm(data_access_edu_sysBP$sysBP ~ x_hypos[, "age_f7"] + x_hypos[, "male"] + 
-                    x_hypos[, "white"] + x_hypos[, "edu"] + x_hypos[, "green_dec12"])
+                    x_hypos[, "white"] + x_hypos[, "edu"] + x_hypos[, "int3"] + x_hypos[, "green_dec12"])
 summary(param1_mod)
 
-# Nope, is pretty much no association here, suggesting no association between access to green space in childhood and being overweight at age 7.
+# Is a slight association here, but rather weak, suggesting little association between access to green space in childhood and high SBP at age 7.
 anova(base_mod, param1_mod)
 
 
@@ -1251,7 +1104,7 @@ mod.cv
 # Plot the log lambda by MSE to show both 'optimal' and '1SE' models (number of parameters is at top of plot)
 plot(mod.cv) 
 
-# Parameters in the 1SE and 'optimal' models - The 1SE just contains just the 4 parameters included by default (age, sex, ethnicity and education), suggesting no association with access to green space exposure, although the minimum mean squared error value has 16 parameters (most of the hypotheses); however, the mean squared error is practically identical, suggesting little improvement in model fit.
+# Parameters in the 1SE and 'optimal' models - The 1SE just contains just the 4 parameters included by default (age, sex, ethnicity and education), suggesting no association with access to green space exposure, although the minimum mean squared error value has 14 parameters (most of the hypotheses); however, the mean squared error is practically identical, suggesting little improvement in model fit.
 coef(mod.cv, s = mod.cv$lambda.1se)
 coef(mod.cv, s = mod.cv$lambda.min)
 
@@ -1291,14 +1144,6 @@ mod_access_edu_diaBP
 # Plot these results
 plot(mod_access_edu_diaBP)
 
-# Look at the variables included at each step
-coef(mod_access_edu_diaBP, s = max(mod_access_edu_diaBP$lambda[mod_access_edu_diaBP$df == 4])); min(mod_access_edu_diaBP$dev.ratio[mod_access_edu_diaBP$df == 4])
-
-coef(mod_access_edu_diaBP, s = max(mod_access_edu_diaBP$lambda[mod_access_edu_diaBP$df == 5])); min(mod_access_edu_diaBP$dev.ratio[mod_access_edu_diaBP$df == 5])
-
-coef(mod_access_edu_diaBP, s = max(mod_access_edu_diaBP$lambda[mod_access_edu_diaBP$df == 6])); min(mod_access_edu_diaBP$dev.ratio[mod_access_edu_diaBP$df == 6])
-
-coef(mod_access_edu_diaBP, s = max(mod_access_edu_diaBP$lambda[mod_access_edu_diaBP$df == 8])); min(mod_access_edu_diaBP$dev.ratio[mod_access_edu_diaBP$df == 8])
 
 
 ### Visual inspection of results (although just looking at the deviance ratios there doesn't seem to be much of an effect of access to green space at all)
@@ -1307,14 +1152,6 @@ coef(mod_access_edu_diaBP, s = max(mod_access_edu_diaBP$lambda[mod_access_edu_di
 df <- lasso_table(mod_access_edu_diaBP)
 df
 
-
-# Make a plot of deviance ratio by lambda value, to show the time variables were entered and the improvement in model fit. Need to be careful about scale of y-axis, as improvement in model fit may not that large.
-plot(mod_access_edu_diaBP$lambda, mod_access_edu_diaBP$dev.ratio, type = "l",
-     xlab = "Lambda value", ylab = "Deviance ratio", 
-     xlim = rev(range(mod_access_edu_diaBP$lambda)), ylim = c(0, max(mod_access_edu_diaBP$dev.ratio)))
-text(df$Lambda, 0, labels = df$Variables, srt = 90, adj = 0)
-
-
 ## Put lambda on the log scale, else differences between early models inflated, as lambda decreases on log scale. This does make the plot slightly more readable, and groups early-included variables closer together
 mod_access_edu_diaBP$log_lambda <- log(mod_access_edu_diaBP$lambda)
 mod_access_edu_diaBP
@@ -1322,14 +1159,14 @@ mod_access_edu_diaBP
 df$log_lambda <- log(as.numeric(df$Lambda))
 df
 
-# This looks better, although same issues as above re. interpreting the first variable added (doesn't mean is a strong predictor of outcome). Here, variable 'green_dec12' is entered quite a bit before all other variables, and although the deviance ratio hasn't improved by much (0.02%), it's a larger increase than seen for the models above (normally <0.008%).
+# Make the plot
 plot(mod_access_edu_diaBP$log_lambda, mod_access_edu_diaBP$dev.ratio, type = "l",
      xlab = "Log lambda value", ylab = "Deviance ratio", 
      xlim = rev(range(mod_access_edu_diaBP$log_lambda)), ylim = c(0.004, max(mod_access_edu_diaBP$dev.ratio)))
 text(df$log_lambda, 0.004, labels = df$Variables, srt = 90, adj = 0)
 
 # save this plot
-pdf(file = "LogLambdaPlot_accessEduDiaBP.pdf", height = 7, width = 11)
+pdf(file = "LogLambdaPlot_accessEduDiaBP.pdf", height = 6, width = 10)
 plot(mod_access_edu_diaBP$log_lambda, mod_access_edu_diaBP$dev.ratio, type = "l",
      xlab = "Log lambda value", ylab = "Deviance ratio", 
      xlim = rev(range(mod_access_edu_diaBP$log_lambda)), ylim = c(0.004, max(mod_access_edu_diaBP$dev.ratio)))
@@ -1337,7 +1174,7 @@ text(df$log_lambda, 0.004, labels = df$Variables, srt = 90, adj = 0)
 dev.off()
 
 
-## From these results, would seem to be that nothing is really going on here - Will do a likelihood ratio test to see whether inclusion of first parameter(s) added (green_dec12) increases model fit of standard linear regression model
+## From these results, would seem to be that little is really going on here (although perhaps weak evidence that 'green_dec12' associated with outcome) - Will do a likelihood ratio test to see whether inclusion of first parameter(s) added (green_dec12) increases model fit of standard linear regression model
 base_mod <- lm(data_access_edu_diaBP$diaBP ~ x_hypos[, "age_f7"] + x_hypos[, "male"] + x_hypos[, "white"] + 
                  x_hypos[, "edu"])
 summary(base_mod)
@@ -1348,6 +1185,9 @@ summary(param1_mod)
 
 # Does seem to be an association here, with a decrease in green space access between pregnancy and age 4 associated with lower diastolic BP. However, given that the effect size is tiny and interpretation not clear (why would reducing access to green space be associated with lower BP?), this could just be the model hooking up to random noise.
 anova(base_mod, param1_mod)
+
+coef(summary(param1_mod))
+confint(param1_mod)
 
 # Does adding the next parameter (green_inc23_int) improve model fit? No.
 param2_mod <- lm(data_access_edu_diaBP$diaBP ~ x_hypos[, "age_f7"] + x_hypos[, "male"] + 
@@ -1365,7 +1205,7 @@ mod.cv
 # Plot the log lambda by MSE to show both 'optimal' and '1SE' models (number of parameters is at top of plot)
 plot(mod.cv) 
 
-# Parameters in the 1SE and 'optimal' models - The 1SE model is just the null/covariate-only model, while the 'optimal'/lowest MSE model also contains green_dec12. The difference in MSE is minimal, though, so not especially convincing. Suggests at best a very weak association with access to green space exposure
+# Parameters in the 1SE and 'optimal' models - The 1SE model is just the null/covariate-only model, while the 'optimal'/lowest MSE model also contains green_dec12 and green_inc23_int. The difference in MSE is minimal, though, so not especially convincing. Suggests at best a very weak association with access to green space exposure
 coef(mod.cv, s = mod.cv$lambda.1se)
 coef(mod.cv, s = mod.cv$lambda.min)
 
@@ -1391,51 +1231,59 @@ data_access <- data
 
 # Critical period at first time point only
 data_access$crit1 <- data_access$greenSpace_preg
+data_access$crit1 <- data_access$crit1 - mean(data_access$crit1, na.rm = TRUE)
 
 # Interaction between SEP and first time point
-data_access$int1 <- data_access$deprived * data_access$greenSpace_preg
+data_access$int1 <- data_access$deprived * data_access$crit1
 
 # Critical period at second time point only
 data_access$crit2 <- data_access$greenSpace_4
+data_access$crit2 <- data_access$crit2 - mean(data_access$crit2, na.rm = TRUE)
 
 # Interaction between SEP and second time point
-data_access$int2 <- data_access$deprived * data_access$greenSpace_4
+data_access$int2 <- data_access$deprived * data_access$crit2
 
 # Critical period at third time point only
 data_access$crit3 <- data_access$greenSpace_7
+data_access$crit3 <- data_access$crit3 - mean(data_access$crit3, na.rm = TRUE)
 
 # Interaction between SEP and third time point
-data_access$int3 <- data_access$deprived * data_access$greenSpace_7
+data_access$int3 <- data_access$deprived * data_access$crit3
 
 # Linear accumulation of all exposures
 data_access$accumulation <- data_access$greenSpace_preg + data_access$greenSpace_4 + data_access$greenSpace_7
+data_access$accumulation <- data_access$accumulation - mean(data_access$accumulation, na.rm = TRUE)
 
 # Interaction between SEP and cumulative exposure
 data_access$int_accum <- data_access$deprived * data_access$accumulation
 
 # Increase in access to green space from time 1 to time 2
 data_access$green_inc12 <- (1 - data_access$greenSpace_preg) * data_access$greenSpace_4
+data_access$green_inc12 <- data_access$green_inc12 - mean(data_access$green_inc12, na.rm = TRUE)
 
 # Increase in access to green space from time 1 to time 2, with an interaction with SEP
-data_access$green_inc12_int <- (1 - data_access$greenSpace_preg) * data_access$greenSpace_4 * data_access$deprived
+data_access$green_inc12_int <- data_access$green_inc12 * data_access$deprived
 
 # Decrease in access to green space from time 1 to time 2
 data_access$green_dec12 <- (1 - data_access$greenSpace_4) * data_access$greenSpace_preg
+data_access$green_dec12 <- data_access$green_dec12 - mean(data_access$green_dec12, na.rm = TRUE)
 
 # Decrease in access to green space from time 1 to time 2, with an interaction with SEP
-data_access$green_dec12_int <- (1 - data_access$greenSpace_4) * data_access$greenSpace_preg * data_access$deprived
+data_access$green_dec12_int <- data_access$green_dec12 * data_access$deprived
 
 # Increase in access to green space from time 2 to time 3
 data_access$green_inc23 <- (1 - data_access$greenSpace_4) * data_access$greenSpace_7
+data_access$green_inc23 <- data_access$green_inc23 - mean(data_access$green_inc23, na.rm = TRUE)
 
 # Increase in access to green space from time 2 to time 3, with an interaction with SEP
-data_access$green_inc23_int <- (1 - data_access$greenSpace_4) * data_access$greenSpace_7 * data_access$deprived
+data_access$green_inc23_int <- data_access$green_inc23 * data_access$deprived
 
 # Decrease in access to green space from time 2 to time 3
 data_access$green_dec23 <- (1 - data_access$greenSpace_7) * data_access$greenSpace_4
+data_access$green_dec23 <- data_access$green_dec23 - mean(data_access$green_dec23, na.rm = TRUE)
 
 # Decrease in access to green space from time 2 to time 3, with an interaction with SEP
-data_access$green_dec23_int <- (1 - data_access$greenSpace_7) * data_access$greenSpace_4 * data_access$deprived
+data_access$green_dec23_int <- data_access$green_dec23 * data_access$deprived
 
 
 ## Make a dataset just with the outcomes, exposure hypotheses and covariates
@@ -1454,6 +1302,7 @@ data_access_dep_bmi <- data_access_dep %>%
   filter(complete.cases(BMI_f7, age_f7, male, white, deprived, crit1, int1))
 
 summary(data_access_dep_bmi)
+nrow(data_access_dep_bmi)
 
 # Save the life-course hypotheses and covariates as a matrix
 x_hypos <- data_access_dep_bmi %>%
@@ -1488,28 +1337,12 @@ mod_access_dep_bmi
 # Plot these results
 plot(mod_access_dep_bmi)
 
-# Look at the variables included at each step
-coef(mod_access_dep_bmi, s = max(mod_access_dep_bmi$lambda[mod_access_dep_bmi$df == 4])); min(mod_access_dep_bmi$dev.ratio[mod_access_dep_bmi$df == 4])
-
-coef(mod_access_dep_bmi, s = max(mod_access_dep_bmi$lambda[mod_access_dep_bmi$df == 5])); min(mod_access_dep_bmi$dev.ratio[mod_access_dep_bmi$df == 5])
-
-coef(mod_access_dep_bmi, s = max(mod_access_dep_bmi$lambda[mod_access_dep_bmi$df == 6])); min(mod_access_dep_bmi$dev.ratio[mod_access_dep_bmi$df == 6])
-
-coef(mod_access_dep_bmi, s = max(mod_access_dep_bmi$lambda[mod_access_dep_bmi$df == 7])); min(mod_access_dep_bmi$dev.ratio[mod_access_dep_bmi$df == 7])
-
 
 ### Visual inspection of results (although just looking at the deviance ratios there doesn't seem to be much of an effect of access to green space at all)
 
 # First, use the 'lasso-table' function defined above to pick out the changes in variables and the increment in deviance ratio
 df <- lasso_table(mod_access_dep_bmi)
 df
-
-
-# Make a plot of deviance ratio by lambda value, to show the time variables were entered and the improvement in model fit. This makes it clearer when different variables were added (not the neatest plot, though, as variables bunch up and overlap as lambda approaches 0...). Also, need to be careful about scale of y-axis, as improvement in model fit may not that large.
-plot(mod_access_dep_bmi$lambda, mod_access_dep_bmi$dev.ratio, type = "l",
-     xlab = "Lambda value", ylab = "Deviance ratio", 
-     xlim = rev(range(mod_access_dep_bmi$lambda)), ylim = c(0, max(mod_access_dep_bmi$dev.ratio)))
-text(df$Lambda, 0, labels = df$Variables, srt = 90, adj = 0)
 
 ## Put lambda on the log scale, else differences between early models inflated, as lambda decreases on log scale. This does make the plot slightly more readable, and groups early-included variables closer together
 mod_access_dep_bmi$log_lambda <- log(mod_access_dep_bmi$lambda)
@@ -1518,15 +1351,14 @@ mod_access_dep_bmi
 df$log_lambda <- log(as.numeric(df$Lambda))
 df
 
-
-# This looks better, although same issues as above re. interpreting the first variable added (doesn't mean is a strong predictor of outcome).
+# Make a plot
 plot(mod_access_dep_bmi$log_lambda, mod_access_dep_bmi$dev.ratio, type = "l",
      xlab = "Log lambda value", ylab = "Deviance ratio", 
      xlim = rev(range(mod_access_dep_bmi$log_lambda)), ylim = c(0.008, max(mod_access_dep_bmi$dev.ratio)))
 text(df$log_lambda, 0.008, labels = df$Variables, srt = 90, adj = 0)
 
 # save this plot
-pdf(file = "LogLambdaPlot_accessDepBMI.pdf", height = 7, width = 11)
+pdf(file = "LogLambdaPlot_accessDepBMI.pdf", height = 6, width = 10)
 plot(mod_access_dep_bmi$log_lambda, mod_access_dep_bmi$dev.ratio, type = "l",
      xlab = "Log lambda value", ylab = "Deviance ratio", 
      xlim = rev(range(mod_access_dep_bmi$log_lambda)), ylim = c(0.008, max(mod_access_dep_bmi$dev.ratio)))
@@ -1572,6 +1404,7 @@ data_access_dep_overweight <- data_access_dep %>%
   filter(complete.cases(overweight, age_f7, male, white, deprived, crit1, int1))
 
 summary(data_access_dep_overweight)
+nrow(data_access_dep_overweight)
 
 # Save the life-course hypotheses and covariates as a matrix
 x_hypos <- data_access_dep_overweight %>%
@@ -1594,27 +1427,12 @@ mod_access_dep_over
 # Plot these results
 plot(mod_access_dep_over)
 
-# Look at the variables included at each step
-coef(mod_access_dep_over, s = max(mod_access_dep_over$lambda[mod_access_dep_over$df == 4])); min(mod_access_dep_over$dev.ratio[mod_access_dep_over$df == 4])
-
-coef(mod_access_dep_over, s = max(mod_access_dep_over$lambda[mod_access_dep_over$df == 6])); min(mod_access_dep_over$dev.ratio[mod_access_dep_over$df == 6])
-
-coef(mod_access_dep_over, s = max(mod_access_dep_over$lambda[mod_access_dep_over$df == 7])); min(mod_access_dep_over$dev.ratio[mod_access_dep_over$df == 7])
-
 
 ### Visual inspection of results (although just looking at the deviance ratios there doesn't seem to be much of an effect of access to green space at all)
 
 # First, use the 'lasso-table' function defined above to pick out the changes in variables and the increment in deviance ratio
 df <- lasso_table(mod_access_dep_over)
 df
-
-
-# Make a plot of deviance ratio by lambda value, to show the time variables were entered and the improvement in model fit. Need to be careful about scale of y-axis, as improvement in model fit may not that large.
-plot(mod_access_dep_over$lambda, mod_access_dep_over$dev.ratio, type = "l",
-     xlab = "Lambda value", ylab = "Deviance ratio", 
-     xlim = rev(range(mod_access_dep_over$lambda)), ylim = c(0, max(mod_access_dep_over$dev.ratio)))
-text(df$Lambda, 0, labels = df$Variables, srt = 90, adj = 0)
-
 
 ## Put lambda on the log scale, else differences between early models inflated, as lambda decreases on log scale. This does make the plot slightly more readable, and groups early-included variables closer together
 mod_access_dep_over$log_lambda <- log(mod_access_dep_over$lambda)
@@ -1623,14 +1441,14 @@ mod_access_dep_over
 df$log_lambda <- log(as.numeric(df$Lambda))
 df
 
-# This looks better, although same issues as above re. interpreting the first variable added (doesn't mean is a strong predictor of outcome).
+# Make a plot
 plot(mod_access_dep_over$log_lambda, mod_access_dep_over$dev.ratio, type = "l",
      xlab = "Log lambda value", ylab = "Deviance ratio", 
      xlim = rev(range(mod_access_dep_over$log_lambda)), ylim = c(0.001, max(mod_access_dep_over$dev.ratio)))
 text(df$log_lambda, 0.001, labels = df$Variables, srt = 90, adj = 0)
 
 # save this plot
-pdf(file = "LogLambdaPlot_accessDepOverweight.pdf", height = 7, width = 11)
+pdf(file = "LogLambdaPlot_accessDepOverweight.pdf", height = 6, width = 10)
 plot(mod_access_dep_over$log_lambda, mod_access_dep_over$dev.ratio, type = "l",
      xlab = "Log lambda value", ylab = "Deviance ratio", 
      xlim = rev(range(mod_access_dep_over$log_lambda)), ylim = c(0.001, max(mod_access_dep_over$dev.ratio)))
@@ -1677,6 +1495,7 @@ data_access_dep_sysBP <- data_access_dep %>%
   filter(complete.cases(sysBP, age_f7, male, white, deprived, crit1, int1))
 
 summary(data_access_dep_sysBP)
+nrow(data_access_dep_sysBP)
 
 # Save the life-course hypotheses and covariates as a matrix
 x_hypos <- data_access_dep_sysBP %>%
@@ -1699,29 +1518,12 @@ mod_access_dep_sysBP
 # Plot these results
 plot(mod_access_dep_sysBP)
 
-# Look at the variables included at each step
-coef(mod_access_dep_sysBP, s = max(mod_access_dep_sysBP$lambda[mod_access_dep_sysBP$df == 4])); min(mod_access_dep_sysBP$dev.ratio[mod_access_dep_sysBP$df == 4])
-
-coef(mod_access_dep_sysBP, s = max(mod_access_dep_sysBP$lambda[mod_access_dep_sysBP$df == 5])); min(mod_access_dep_sysBP$dev.ratio[mod_access_dep_sysBP$df == 5])
-
-coef(mod_access_dep_sysBP, s = max(mod_access_dep_sysBP$lambda[mod_access_dep_sysBP$df == 6])); min(mod_access_dep_sysBP$dev.ratio[mod_access_dep_sysBP$df == 6])
-
-coef(mod_access_dep_sysBP, s = max(mod_access_dep_sysBP$lambda[mod_access_dep_sysBP$df == 7])); min(mod_access_dep_sysBP$dev.ratio[mod_access_dep_sysBP$df == 7])
-
 
 ### Visual inspection of results (although just looking at the deviance ratios there doesn't seem to be much of an effect of access to green space at all)
 
 # First, use the 'lasso-table' function defined above to pick out the changes in variables and the increment in deviance ratio
 df <- lasso_table(mod_access_dep_sysBP)
 df
-
-
-# Make a plot of deviance ratio by lambda value, to show the time variables were entered and the improvement in model fit. Need to be careful about scale of y-axis, as improvement in model fit may not that large.
-plot(mod_access_dep_sysBP$lambda, mod_access_dep_sysBP$dev.ratio, type = "l",
-     xlab = "Lambda value", ylab = "Deviance ratio", 
-     xlim = rev(range(mod_access_dep_sysBP$lambda)), ylim = c(0, max(mod_access_dep_sysBP$dev.ratio)))
-text(df$Lambda, 0, labels = df$Variables, srt = 90, adj = 0)
-
 
 ## Put lambda on the log scale, else differences between early models inflated, as lambda decreases on log scale. This does make the plot slightly more readable, and groups early-included variables closer together
 mod_access_dep_sysBP$log_lambda <- log(mod_access_dep_sysBP$lambda)
@@ -1730,14 +1532,14 @@ mod_access_dep_sysBP
 df$log_lambda <- log(as.numeric(df$Lambda))
 df
 
-# This looks better, although same issues as above re. interpreting the first variable added (doesn't mean is a strong predictor of outcome).
+# Make a plot
 plot(mod_access_dep_sysBP$log_lambda, mod_access_dep_sysBP$dev.ratio, type = "l",
      xlab = "Log lambda value", ylab = "Deviance ratio", 
      xlim = rev(range(mod_access_dep_sysBP$log_lambda)), ylim = c(0.005, max(mod_access_dep_sysBP$dev.ratio)))
 text(df$log_lambda, 0.005, labels = df$Variables, srt = 90, adj = 0)
 
 # save this plot
-pdf(file = "LogLambdaPlot_accessDepSysBP.pdf", height = 7, width = 11)
+pdf(file = "LogLambdaPlot_accessDepSysBP.pdf", height = 6, width = 10)
 plot(mod_access_dep_sysBP$log_lambda, mod_access_dep_sysBP$dev.ratio, type = "l",
      xlab = "Log lambda value", ylab = "Deviance ratio", 
      xlim = rev(range(mod_access_dep_sysBP$log_lambda)), ylim = c(0.005, max(mod_access_dep_sysBP$dev.ratio)))
@@ -1745,7 +1547,7 @@ text(df$log_lambda, 0.005, labels = df$Variables, srt = 90, adj = 0)
 dev.off()
 
 
-## From these results, would seem to be that not much is really going on here, although first variable eneterd ('green_dec12_int') does appear to increase model fit marginally... - Will do a likelihood ratio test to see whether inclusion of first parameter(s) added (green_dec12_int) increases model fit of standard linear regression model
+## From these results, would seem to be that not much is really going on here, although first variable entered ('green_dec12_int') does appear to increase model fit marginally... - Will do a likelihood ratio test to see whether inclusion of first parameter(s) added (green_dec12_int) increases model fit of standard linear regression model
 base_mod <- lm(data_access_dep_sysBP$sysBP ~ x_hypos[, "age_f7"] + x_hypos[, "male"] + x_hypos[, "white"] + 
                  x_hypos[, "deprived"])
 summary(base_mod)
@@ -1756,6 +1558,9 @@ summary(param1_mod)
 
 # Does seem to be an association here, with a decrease in green space access between pregnancy and age 4 in deprived individuals associated with lower diastolic BP. However, given that the effect size is tiny and interpretation not clear (why would reducing access to green space be associated with lower BP among deprived individuals?), this could just be the model hooking up to random noise.
 anova(base_mod, param1_mod)
+
+coef(summary(param1_mod))
+confint(param1_mod)
 
 # Does adding the next parameter (crit2) improve model fit? No.
 param2_mod <- lm(data_access_dep_sysBP$sysBP ~ x_hypos[, "age_f7"] + x_hypos[, "male"] + 
@@ -1790,6 +1595,7 @@ data_access_dep_diaBP <- data_access_dep %>%
   filter(complete.cases(diaBP, age_f7, male, white, deprived, crit1, int1))
 
 summary(data_access_dep_diaBP)
+nrow(data_access_dep_diaBP)
 
 # Save the life-course hypotheses and covariates as a matrix
 x_hypos <- data_access_dep_diaBP %>%
@@ -1812,29 +1618,12 @@ mod_access_dep_diaBP
 # Plot these results
 plot(mod_access_dep_diaBP)
 
-# Look at the variables included at each step
-coef(mod_access_dep_diaBP, s = max(mod_access_dep_diaBP$lambda[mod_access_dep_diaBP$df == 4])); min(mod_access_dep_diaBP$dev.ratio[mod_access_dep_diaBP$df == 4])
-
-coef(mod_access_dep_diaBP, s = max(mod_access_dep_diaBP$lambda[mod_access_dep_diaBP$df == 5])); min(mod_access_dep_diaBP$dev.ratio[mod_access_dep_diaBP$df == 5])
-
-coef(mod_access_dep_diaBP, s = max(mod_access_dep_diaBP$lambda[mod_access_dep_diaBP$df == 7])); min(mod_access_dep_diaBP$dev.ratio[mod_access_dep_diaBP$df == 7])
-
-coef(mod_access_dep_diaBP, s = max(mod_access_dep_diaBP$lambda[mod_access_dep_diaBP$df == 8])); min(mod_access_dep_diaBP$dev.ratio[mod_access_dep_diaBP$df == 8])
-
 
 ### Visual inspection of results (although just looking at the deviance ratios there doesn't seem to be much of an effect of access to green space at all)
 
 # First, use the 'lasso-table' function defined above to pick out the changes in variables and the increment in deviance ratio
 df <- lasso_table(mod_access_dep_diaBP)
 df
-
-
-# Make a plot of deviance ratio by lambda value, to show the time variables were entered and the improvement in model fit. Need to be careful about scale of y-axis, as improvement in model fit may not that large.
-plot(mod_access_dep_diaBP$lambda, mod_access_dep_diaBP$dev.ratio, type = "l",
-     xlab = "Lambda value", ylab = "Deviance ratio", 
-     xlim = rev(range(mod_access_dep_diaBP$lambda)), ylim = c(0, max(mod_access_dep_diaBP$dev.ratio)))
-text(df$Lambda, 0, labels = df$Variables, srt = 90, adj = 0)
-
 
 ## Put lambda on the log scale, else differences between early models inflated, as lambda decreases on log scale. This does make the plot slightly more readable, and groups early-included variables closer together
 mod_access_dep_diaBP$log_lambda <- log(mod_access_dep_diaBP$lambda)
@@ -1843,14 +1632,14 @@ mod_access_dep_diaBP
 df$log_lambda <- log(as.numeric(df$Lambda))
 df
 
-# This looks better, although same issues as above re. interpreting the first variable added (doesn't mean is a strong predictor of outcome). Here, variable 'green_dec12' is entered quite a bit before all other variables, and although the deviance ratio hasn't improved by much (0.02%), it's a larger increase than seen for the models above (normally <0.008%).
+# Make a plot
 plot(mod_access_dep_diaBP$log_lambda, mod_access_dep_diaBP$dev.ratio, type = "l",
      xlab = "Log lambda value", ylab = "Deviance ratio", 
      xlim = rev(range(mod_access_dep_diaBP$log_lambda)), ylim = c(0.002, max(mod_access_dep_diaBP$dev.ratio)))
 text(df$log_lambda, 0.002, labels = df$Variables, srt = 90, adj = 0)
 
 # save this plot
-pdf(file = "LogLambdaPlot_accessDepDiaBP.pdf", height = 7, width = 11)
+pdf(file = "LogLambdaPlot_accessDepDiaBP.pdf", height = 6, width = 10)
 plot(mod_access_dep_diaBP$log_lambda, mod_access_dep_diaBP$dev.ratio, type = "l",
      xlab = "Log lambda value", ylab = "Deviance ratio", 
      xlim = rev(range(mod_access_dep_diaBP$log_lambda)), ylim = c(0.002, max(mod_access_dep_diaBP$dev.ratio)))
@@ -1870,10 +1659,13 @@ summary(param1_mod)
 # Does seem to be an association here, with a decrease in green space access between pregnancy and age 4 associated with lower diastolic BP. However, given that the effect size is tiny and interpretation not clear (why would reducing access to green space be associated with lower BP?), this could just be the model hooking up to random noise.
 anova(base_mod, param1_mod)
 
-# Does adding the next parameter(s) (green_inc12_int and green_dec12_int) improve model fit? No.
+coef(summary(param1_mod))
+confint(param1_mod)
+
+# Does adding the next parameter(s) (green_dec12_int) improve model fit? No.
 param2_mod <- lm(data_access_dep_diaBP$diaBP ~ x_hypos[, "age_f7"] + x_hypos[, "male"] + 
                    x_hypos[, "white"] + x_hypos[, "deprived"] + x_hypos[, "green_dec12"] + 
-                   x_hypos[, "green_inc12_int"] + x_hypos[, "green_dec12_int"])
+                   x_hypos[, "green_dec12_int"])
 summary(param2_mod)
 
 anova(param1_mod, param2_mod)
@@ -1914,51 +1706,59 @@ data_access <- data
 
 # Critical period at first time point only
 data_access$crit1 <- data_access$greenSpace_preg
+data_access$crit1 <- data_access$crit1 - mean(data_access$crit1, na.rm = TRUE)
 
 # Interaction between SEP and first time point
-data_access$int1 <- data_access$lowIncome * data_access$greenSpace_preg
+data_access$int1 <- data_access$lowIncome * data_access$crit1
 
 # Critical period at second time point only
 data_access$crit2 <- data_access$greenSpace_4
+data_access$crit2 <- data_access$crit2 - mean(data_access$crit2, na.rm = TRUE)
 
 # Interaction between SEP and second time point
-data_access$int2 <- data_access$lowIncome * data_access$greenSpace_4
+data_access$int2 <- data_access$lowIncome * data_access$crit2
 
 # Critical period at third time point only
 data_access$crit3 <- data_access$greenSpace_7
+data_access$crit3 <- data_access$crit3 - mean(data_access$crit3, na.rm = TRUE)
 
 # Interaction between SEP and third time point
-data_access$int3 <- data_access$lowIncome * data_access$greenSpace_7
+data_access$int3 <- data_access$lowIncome * data_access$crit3
 
 # Linear accumulation of all exposures
 data_access$accumulation <- data_access$greenSpace_preg + data_access$greenSpace_4 + data_access$greenSpace_7
+data_access$accumulation <- data_access$accumulation - mean(data_access$accumulation, na.rm = TRUE)
 
 # Interaction between SEP and cumulative exposure
 data_access$int_accum <- data_access$lowIncome * data_access$accumulation
 
 # Increase in access to green space from time 1 to time 2
 data_access$green_inc12 <- (1 - data_access$greenSpace_preg) * data_access$greenSpace_4
+data_access$green_inc12 <- data_access$green_inc12 - mean(data_access$green_inc12, na.rm = TRUE)
 
 # Increase in access to green space from time 1 to time 2, with an interaction with SEP
-data_access$green_inc12_int <- (1 - data_access$greenSpace_preg) * data_access$greenSpace_4 * data_access$lowIncome
+data_access$green_inc12_int <- data_access$green_inc12 * data_access$lowIncome
 
 # Decrease in access to green space from time 1 to time 2
 data_access$green_dec12 <- (1 - data_access$greenSpace_4) * data_access$greenSpace_preg
+data_access$green_dec12 <- data_access$green_dec12 - mean(data_access$green_dec12, na.rm = TRUE)
 
 # Decrease in access to green space from time 1 to time 2, with an interaction with SEP
-data_access$green_dec12_int <- (1 - data_access$greenSpace_4) * data_access$greenSpace_preg * data_access$lowIncome
+data_access$green_dec12_int <- data_access$green_dec12 * data_access$lowIncome
 
 # Increase in access to green space from time 2 to time 3
 data_access$green_inc23 <- (1 - data_access$greenSpace_4) * data_access$greenSpace_7
+data_access$green_inc23 <- data_access$green_inc23 - mean(data_access$green_inc23, na.rm = TRUE)
 
 # Increase in access to green space from time 2 to time 3, with an interaction with SEP
-data_access$green_inc23_int <- (1 - data_access$greenSpace_4) * data_access$greenSpace_7 * data_access$lowIncome
+data_access$green_inc23_int <- data_access$green_inc23 * data_access$lowIncome
 
 # Decrease in access to green space from time 2 to time 3
 data_access$green_dec23 <- (1 - data_access$greenSpace_7) * data_access$greenSpace_4
+data_access$green_dec23 <- data_access$green_dec23 - mean(data_access$green_dec23, na.rm = TRUE)
 
 # Decrease in access to green space from time 2 to time 3, with an interaction with SEP
-data_access$green_dec23_int <- (1 - data_access$greenSpace_7) * data_access$greenSpace_4 * data_access$lowIncome
+data_access$green_dec23_int <- data_access$green_dec23 * data_access$lowIncome
 
 
 ## Make a dataset just with the outcomes, exposure hypotheses and covariates
@@ -1977,6 +1777,7 @@ data_access_inc_bmi <- data_access_inc %>%
   filter(complete.cases(BMI_f7, age_f7, male, white, lowIncome, crit1, int1))
 
 summary(data_access_inc_bmi)
+nrow(data_access_inc_bmi)
 
 # Save the life-course hypotheses and covariates as a matrix
 x_hypos <- data_access_inc_bmi %>%
@@ -2011,28 +1812,12 @@ mod_access_inc_bmi
 # Plot these results
 plot(mod_access_inc_bmi)
 
-# Look at the variables included at each step
-coef(mod_access_inc_bmi, s = max(mod_access_inc_bmi$lambda[mod_access_inc_bmi$df == 4])); min(mod_access_inc_bmi$dev.ratio[mod_access_inc_bmi$df == 4])
-
-coef(mod_access_inc_bmi, s = max(mod_access_inc_bmi$lambda[mod_access_inc_bmi$df == 5])); min(mod_access_inc_bmi$dev.ratio[mod_access_inc_bmi$df == 5])
-
-coef(mod_access_inc_bmi, s = max(mod_access_inc_bmi$lambda[mod_access_inc_bmi$df == 7])); min(mod_access_inc_bmi$dev.ratio[mod_access_inc_bmi$df == 7])
-
-coef(mod_access_inc_bmi, s = max(mod_access_inc_bmi$lambda[mod_access_inc_bmi$df == 8])); min(mod_access_inc_bmi$dev.ratio[mod_access_inc_bmi$df == 8])
-
 
 ### Visual inspection of results (although just looking at the deviance ratios there doesn't seem to be much of an effect of access to green space at all)
 
 # First, use the 'lasso-table' function defined above to pick out the changes in variables and the increment in deviance ratio
 df <- lasso_table(mod_access_inc_bmi)
 df
-
-
-# Make a plot of deviance ratio by lambda value, to show the time variables were entered and the improvement in model fit. This makes it clearer when different variables were added (not the neatest plot, though, as variables bunch up and overlap as lambda approaches 0...). Also, need to be careful about scale of y-axis, as improvement in model fit may not that large.
-plot(mod_access_inc_bmi$lambda, mod_access_inc_bmi$dev.ratio, type = "l",
-     xlab = "Lambda value", ylab = "Deviance ratio", 
-     xlim = rev(range(mod_access_inc_bmi$lambda)), ylim = c(0, max(mod_access_inc_bmi$dev.ratio)))
-text(df$Lambda, 0, labels = df$Variables, srt = 90, adj = 0)
 
 ## Put lambda on the log scale, else differences between early models inflated, as lambda decreases on log scale. This does make the plot slightly more readable, and groups early-included variables closer together
 mod_access_inc_bmi$log_lambda <- log(mod_access_inc_bmi$lambda)
@@ -2041,15 +1826,14 @@ mod_access_inc_bmi
 df$log_lambda <- log(as.numeric(df$Lambda))
 df
 
-
-# This looks better, although same issues as above re. interpreting the first variable added (doesn't mean is a strong predictor of outcome).
+# Make a plot
 plot(mod_access_inc_bmi$log_lambda, mod_access_inc_bmi$dev.ratio, type = "l",
      xlab = "Log lambda value", ylab = "Deviance ratio", 
      xlim = rev(range(mod_access_inc_bmi$log_lambda)), ylim = c(0.006, max(mod_access_inc_bmi$dev.ratio)))
 text(df$log_lambda, 0.006, labels = df$Variables, srt = 90, adj = 0)
 
 # save this plot
-pdf(file = "LogLambdaPlot_accessIncomeBMI.pdf", height = 7, width = 11)
+pdf(file = "LogLambdaPlot_accessIncomeBMI.pdf", height = 6, width = 10)
 plot(mod_access_inc_bmi$log_lambda, mod_access_inc_bmi$dev.ratio, type = "l",
      xlab = "Log lambda value", ylab = "Deviance ratio", 
      xlim = rev(range(mod_access_inc_bmi$log_lambda)), ylim = c(0.006, max(mod_access_inc_bmi$dev.ratio)))
@@ -2095,6 +1879,7 @@ data_access_inc_overweight <- data_access_inc %>%
   filter(complete.cases(overweight, age_f7, male, white, lowIncome, crit1, int1))
 
 summary(data_access_inc_overweight)
+nrow(data_access_inc_overweight)
 
 # Save the life-course hypotheses and covariates as a matrix
 x_hypos <- data_access_inc_overweight %>%
@@ -2117,27 +1902,12 @@ mod_access_inc_over
 # Plot these results
 plot(mod_access_inc_over)
 
-# Look at the variables included at each step
-coef(mod_access_inc_over, s = max(mod_access_inc_over$lambda[mod_access_inc_over$df == 4])); min(mod_access_inc_over$dev.ratio[mod_access_inc_over$df == 4])
-
-coef(mod_access_inc_over, s = max(mod_access_inc_over$lambda[mod_access_inc_over$df == 6])); min(mod_access_inc_over$dev.ratio[mod_access_inc_over$df == 6])
-
-coef(mod_access_inc_over, s = max(mod_access_inc_over$lambda[mod_access_inc_over$df == 7])); min(mod_access_inc_over$dev.ratio[mod_access_inc_over$df == 7])
-
 
 ### Visual inspection of results (although just looking at the deviance ratios there doesn't seem to be much of an effect of access to green space at all)
 
 # First, use the 'lasso-table' function defined above to pick out the changes in variables and the increment in deviance ratio
 df <- lasso_table(mod_access_inc_over)
 df
-
-
-# Make a plot of deviance ratio by lambda value, to show the time variables were entered and the improvement in model fit. Need to be careful about scale of y-axis, as improvement in model fit may not that large.
-plot(mod_access_inc_over$lambda, mod_access_inc_over$dev.ratio, type = "l",
-     xlab = "Lambda value", ylab = "Deviance ratio", 
-     xlim = rev(range(mod_access_inc_over$lambda)), ylim = c(0, max(mod_access_inc_over$dev.ratio)))
-text(df$Lambda, 0, labels = df$Variables, srt = 90, adj = 0)
-
 
 ## Put lambda on the log scale, else differences between early models inflated, as lambda decreases on log scale. This does make the plot slightly more readable, and groups early-included variables closer together
 mod_access_inc_over$log_lambda <- log(mod_access_inc_over$lambda)
@@ -2146,7 +1916,7 @@ mod_access_inc_over
 df$log_lambda <- log(as.numeric(df$Lambda))
 df
 
-# This looks better, although same issues as above re. interpreting the first variable added (doesn't mean is a strong predictor of outcome). (Have to add a bit of faff here to get y-axis to not display in scientific notation)
+# Make a plot (Have to add a bit of faff here to get y-axis to not display in scientific notation)
 plot(mod_access_inc_over$log_lambda, mod_access_inc_over$dev.ratio, type = "l",
      xlab = "Log lambda value", ylab = "Deviance ratio", yaxt = "n",
      xlim = rev(range(mod_access_inc_over$log_lambda)), ylim = c(0.000, max(mod_access_inc_over$dev.ratio)))
@@ -2154,7 +1924,7 @@ axis(2, at = c(0, 0.0002, 0.0004, 0.0006, 0.0008), labels = format(c(0, 0.0002, 
 text(df$log_lambda, 0.000, labels = df$Variables, srt = 90, adj = 0)
 
 # save this plot
-pdf(file = "LogLambdaPlot_accessIncomeOverweight.pdf", height = 7, width = 11)
+pdf(file = "LogLambdaPlot_accessIncomeOverweight.pdf", height = 6, width = 10)
 plot(mod_access_inc_over$log_lambda, mod_access_inc_over$dev.ratio, type = "l",
      xlab = "Log lambda value", ylab = "Deviance ratio", yaxt = "n",
      xlim = rev(range(mod_access_inc_over$log_lambda)), ylim = c(0.000, max(mod_access_inc_over$dev.ratio)))
@@ -2163,7 +1933,7 @@ text(df$log_lambda, 0.000, labels = df$Variables, srt = 90, adj = 0)
 dev.off()
 
 
-## From these results, would seem to be that nothing is really going on here - Will do a likelihood ratio test to see whether inclusion of first parameter(s) added (crit2 and green_inc12_int) increases model fit of standard logistic regression model
+## From these results, would seem to be that nothing is really going on here - Will do a likelihood ratio test to see whether inclusion of first parameter(s) added (crit1 and green_inc12) increases model fit of standard logistic regression model
 base_mod <- glm(data_access_inc_overweight$overweight ~ x_hypos[, "age_f7"] + x_hypos[, "male"] + x_hypos[, "white"] + 
                   x_hypos[, "lowIncome"], family = "binomial")
 summary(base_mod)
@@ -2202,6 +1972,7 @@ data_access_inc_sysBP <- data_access_inc %>%
   filter(complete.cases(sysBP, age_f7, male, white, lowIncome, crit1, int1))
 
 summary(data_access_inc_sysBP)
+nrow(data_access_inc_sysBP)
 
 # Save the life-course hypotheses and covariates as a matrix
 x_hypos <- data_access_inc_sysBP %>%
@@ -2224,29 +1995,12 @@ mod_access_inc_sysBP
 # Plot these results
 plot(mod_access_inc_sysBP)
 
-# Look at the variables included at each step
-coef(mod_access_inc_sysBP, s = max(mod_access_inc_sysBP$lambda[mod_access_inc_sysBP$df == 4])); min(mod_access_inc_sysBP$dev.ratio[mod_access_inc_sysBP$df == 4])
-
-coef(mod_access_inc_sysBP, s = max(mod_access_inc_sysBP$lambda[mod_access_inc_sysBP$df == 6])); min(mod_access_inc_sysBP$dev.ratio[mod_access_inc_sysBP$df == 6])
-
-coef(mod_access_inc_sysBP, s = max(mod_access_inc_sysBP$lambda[mod_access_inc_sysBP$df == 7])); min(mod_access_inc_sysBP$dev.ratio[mod_access_inc_sysBP$df == 7])
-
-coef(mod_access_inc_sysBP, s = max(mod_access_inc_sysBP$lambda[mod_access_inc_sysBP$df == 8])); min(mod_access_inc_sysBP$dev.ratio[mod_access_inc_sysBP$df == 8])
-
 
 ### Visual inspection of results (although just looking at the deviance ratios there doesn't seem to be much of an effect of access to green space at all)
 
 # First, use the 'lasso-table' function defined above to pick out the changes in variables and the increment in deviance ratio
 df <- lasso_table(mod_access_inc_sysBP)
 df
-
-
-# Make a plot of deviance ratio by lambda value, to show the time variables were entered and the improvement in model fit. Need to be careful about scale of y-axis, as improvement in model fit may not that large.
-plot(mod_access_inc_sysBP$lambda, mod_access_inc_sysBP$dev.ratio, type = "l",
-     xlab = "Lambda value", ylab = "Deviance ratio", 
-     xlim = rev(range(mod_access_inc_sysBP$lambda)), ylim = c(0, max(mod_access_inc_sysBP$dev.ratio)))
-text(df$Lambda, 0, labels = df$Variables, srt = 90, adj = 0)
-
 
 ## Put lambda on the log scale, else differences between early models inflated, as lambda decreases on log scale. This does make the plot slightly more readable, and groups early-included variables closer together
 mod_access_inc_sysBP$log_lambda <- log(mod_access_inc_sysBP$lambda)
@@ -2255,14 +2009,14 @@ mod_access_inc_sysBP
 df$log_lambda <- log(as.numeric(df$Lambda))
 df
 
-# This looks better, although same issues as above re. interpreting the first variable added (doesn't mean is a strong predictor of outcome).
+# Make a plot
 plot(mod_access_inc_sysBP$log_lambda, mod_access_inc_sysBP$dev.ratio, type = "l",
      xlab = "Log lambda value", ylab = "Deviance ratio", 
      xlim = rev(range(mod_access_inc_sysBP$log_lambda)), ylim = c(0.000, max(mod_access_inc_sysBP$dev.ratio)))
 text(df$log_lambda, 0.000, labels = df$Variables, srt = 90, adj = 0)
 
 # save this plot
-pdf(file = "LogLambdaPlot_accessIncSysBP.pdf", height = 7, width = 11)
+pdf(file = "LogLambdaPlot_accessIncomeSysBP.pdf", height = 6, width = 10)
 plot(mod_access_inc_sysBP$log_lambda, mod_access_inc_sysBP$dev.ratio, type = "l",
      xlab = "Log lambda value", ylab = "Deviance ratio", 
      xlim = rev(range(mod_access_inc_sysBP$log_lambda)), ylim = c(0.000, max(mod_access_inc_sysBP$dev.ratio)))
@@ -2292,7 +2046,7 @@ mod.cv
 # Plot the log lambda by MSE to show both 'optimal' and '1SE' models (number of parameters is at top of plot)
 plot(mod.cv)
 
-# Parameters in the 1SE and 'optimal' models - The 1SE model just contains just the 4 parameters included by default (age, sex, ethnicity and education), suggesting no association with access to green space exposure; although the minimal MSE model contains 9 parameters (although the MSE is practically indistinguishable from the null model)
+# Parameters in the 1SE and 'optimal' models - Both models just contain just the 4 parameters included by default (age, sex, ethnicity and education), suggesting no association with access to green space exposure
 coef(mod.cv, s = mod.cv$lambda.1se)
 coef(mod.cv, s = mod.cv$lambda.min)
 
@@ -2309,6 +2063,7 @@ data_access_inc_diaBP <- data_access_inc %>%
   filter(complete.cases(diaBP, age_f7, male, white, lowIncome, crit1, int1))
 
 summary(data_access_inc_diaBP)
+nrow(data_access_inc_diaBP)
 
 # Save the life-course hypotheses and covariates as a matrix
 x_hypos <- data_access_inc_diaBP %>%
@@ -2331,29 +2086,12 @@ mod_access_inc_diaBP
 # Plot these results
 plot(mod_access_inc_diaBP)
 
-# Look at the variables included at each step
-coef(mod_access_inc_diaBP, s = max(mod_access_inc_diaBP$lambda[mod_access_inc_diaBP$df == 4])); min(mod_access_inc_diaBP$dev.ratio[mod_access_inc_diaBP$df == 4])
-
-coef(mod_access_inc_diaBP, s = max(mod_access_inc_diaBP$lambda[mod_access_inc_diaBP$df == 5])); min(mod_access_inc_diaBP$dev.ratio[mod_access_inc_diaBP$df == 5])
-
-coef(mod_access_inc_diaBP, s = max(mod_access_inc_diaBP$lambda[mod_access_inc_diaBP$df == 6])); min(mod_access_inc_diaBP$dev.ratio[mod_access_inc_diaBP$df == 6])
-
-coef(mod_access_inc_diaBP, s = max(mod_access_inc_diaBP$lambda[mod_access_inc_diaBP$df == 7])); min(mod_access_inc_diaBP$dev.ratio[mod_access_inc_diaBP$df == 7])
-
 
 ### Visual inspection of results (although just looking at the deviance ratios there doesn't seem to be much of an effect of access to green space at all)
 
 # First, use the 'lasso-table' function defined above to pick out the changes in variables and the increment in deviance ratio
 df <- lasso_table(mod_access_inc_diaBP)
 df
-
-
-# Make a plot of deviance ratio by lambda value, to show the time variables were entered and the improvement in model fit. Need to be careful about scale of y-axis, as improvement in model fit may not that large.
-plot(mod_access_inc_diaBP$lambda, mod_access_inc_diaBP$dev.ratio, type = "l",
-     xlab = "Lambda value", ylab = "Deviance ratio", 
-     xlim = rev(range(mod_access_inc_diaBP$lambda)), ylim = c(0, max(mod_access_inc_diaBP$dev.ratio)))
-text(df$Lambda, 0, labels = df$Variables, srt = 90, adj = 0)
-
 
 ## Put lambda on the log scale, else differences between early models inflated, as lambda decreases on log scale. This does make the plot slightly more readable, and groups early-included variables closer together
 mod_access_inc_diaBP$log_lambda <- log(mod_access_inc_diaBP$lambda)
@@ -2362,22 +2100,22 @@ mod_access_inc_diaBP
 df$log_lambda <- log(as.numeric(df$Lambda))
 df
 
-# This looks better, although same issues as above re. interpreting the first variable added (doesn't mean is a strong predictor of outcome).
+# Make plot
 plot(mod_access_inc_diaBP$log_lambda, mod_access_inc_diaBP$dev.ratio, type = "l",
      xlab = "Log lambda value", ylab = "Deviance ratio", 
      xlim = rev(range(mod_access_inc_diaBP$log_lambda)), ylim = c(0.002, max(mod_access_inc_diaBP$dev.ratio)))
 text(df$log_lambda, 0.002, labels = df$Variables, srt = 90, adj = 0)
 
 # save this plot
-pdf(file = "LogLambdaPlot_accessIncomeDiaBP.pdf", height = 7, width = 11)
-plot(mod_access_dep_diaBP$log_lambda, mod_access_dep_diaBP$dev.ratio, type = "l",
+pdf(file = "LogLambdaPlot_accessIncomeDiaBP.pdf", height = 6, width = 10)
+plot(mod_access_inc_diaBP$log_lambda, mod_access_inc_diaBP$dev.ratio, type = "l",
      xlab = "Log lambda value", ylab = "Deviance ratio", 
-     xlim = rev(range(mod_access_dep_diaBP$log_lambda)), ylim = c(0.002, max(mod_access_dep_diaBP$dev.ratio)))
+     xlim = rev(range(mod_access_inc_diaBP$log_lambda)), ylim = c(0.002, max(mod_access_inc_diaBP$dev.ratio)))
 text(df$log_lambda, 0.002, labels = df$Variables, srt = 90, adj = 0)
 dev.off()
 
 
-## From these results, would seem to be that nothing is really going on here - Will do a likelihood ratio test to see whether inclusion of first parameter(s) added (green_inc12_int) increases model fit of standard linear regression model
+## From these results, would seem to be that not much is really going on here, although potentially 'green_inc12_int' and 'green_dec12' associated with outcome - Will do a likelihood ratio test to see whether inclusion of first parameter(s) added (green_inc12_int) increases model fit of standard linear regression model
 base_mod <- lm(data_access_inc_diaBP$diaBP ~ x_hypos[, "age_f7"] + x_hypos[, "male"] + x_hypos[, "white"] + 
                  x_hypos[, "lowIncome"])
 summary(base_mod)
@@ -2397,6 +2135,9 @@ summary(param2_mod)
 
 anova(param1_mod, param2_mod)
 
+coef(summary(param2_mod))
+confint(param2_mod)
+
 # Does adding the next parameter(s) (green_dec23) improve model fit? No.
 param3_mod <- lm(data_access_inc_diaBP$diaBP ~ x_hypos[, "age_f7"] + x_hypos[, "male"] + 
                    x_hypos[, "white"] + x_hypos[, "lowIncome"] + x_hypos[, "green_inc12_int"] +
@@ -2414,7 +2155,7 @@ mod.cv
 # Plot the log lambda by MSE to show both 'optimal' and '1SE' models (number of parameters is at top of plot)
 plot(mod.cv) 
 
-# Parameters in the 1SE and 'optimal' models - The 1SE model is just the null/covariate-only model, while the 'optimal'/lowest MSE model also contains green_dec12, green_inc12_int and green_dec12. The difference in MSE is minimal, though, so not especially convincing. Suggests at best a very weak association with access to green space exposure
+# Parameters in the 1SE and 'optimal' models - The 1SE model is just the null/covariate-only model, while the 'optimal'/lowest MSE model also contains green_dec12 and green_inc12_int. The difference in MSE is minimal, though, so not especially convincing. Suggests at best a very weak association with access to green space exposure
 coef(mod.cv, s = mod.cv$lambda.1se)
 coef(mod.cv, s = mod.cv$lambda.min)
 
@@ -2446,39 +2187,45 @@ data_dist <- data
 
 # Critical period at first time point only
 data_dist$crit1 <- data_dist$greenDist_preg
+data_dist$crit1 <- data_dist$crit1 - mean(data_dist$crit1, na.rm = TRUE)
 
 # Interaction between SEP and first time point
-data_dist$int1 <- data_dist$edu * data_dist$greenDist_preg
+data_dist$int1 <- data_dist$edu * data_dist$crit1
 
 # Critical period at second time point only
 data_dist$crit2 <- data_dist$greenDist_4
+data_dist$crit2 <- data_dist$crit2 - mean(data_dist$crit2, na.rm = TRUE)
 
 # Interaction between SEP and second time point
-data_dist$int2 <- data_dist$edu * data_dist$greenDist_4
+data_dist$int2 <- data_dist$edu * data_dist$crit2
 
 # Critical period at third time point only
 data_dist$crit3 <- data_dist$greenDist_7
+data_dist$crit3 <- data_dist$crit3 - mean(data_dist$crit3, na.rm = TRUE)
 
 # Interaction between SEP and third time point
-data_dist$int3 <- data_dist$edu * data_dist$greenDist_7
+data_dist$int3 <- data_dist$edu * data_dist$crit3
 
 # Linear accumulation of all exposures
 data_dist$accumulation <- (data_dist$greenDist_preg + data_dist$greenDist_4 + data_dist$greenDist_7) / 3
+data_dist$accumulation <- data_dist$accumulation - mean(data_dist$accumulation, na.rm = TRUE)
 
 # Interaction between SEP and cumulative exposure
 data_dist$int_accum <- data_dist$edu * data_dist$accumulation
 
 # Change in distance to green space between time 1 to time 2
 data_dist$green_ch12 <- data_dist$greenDist_4 - data_dist$greenDist_preg
+data_dist$green_ch12 <- data_dist$green_ch12 - mean(data_dist$green_ch12, na.rm = TRUE)
 
 # Change in distance to green space between time 1 to time 2, with an interaction with SEP
-data_dist$green_ch12_int <- (data_dist$greenDist_4 - data_dist$greenDist_preg) * data_dist$edu
+data_dist$green_ch12_int <- data_dist$green_ch12 * data_dist$edu
 
 # Change in distance to green space between time 2 to time 3
 data_dist$green_ch23 <- data_dist$greenDist_7 - data_dist$greenDist_4
+data_dist$green_ch23 <- data_dist$green_ch23 - mean(data_dist$green_ch23, na.rm = TRUE)
 
 # Change in distance to green space between time 2 to time 3, with an interaction with SEP
-data_dist$green_ch23_int <- (data_dist$greenDist_7 - data_dist$greenDist_4) * data_dist$edu
+data_dist$green_ch23_int <- data_dist$green_ch23 * data_dist$edu
 
 
 ## Make a dataset just with the outcomes, exposure hypotheses and covariates
@@ -2497,6 +2244,7 @@ data_dist_edu_bmi <- data_dist_edu %>%
   filter(complete.cases(BMI_f7, age_f7, male, white, edu, crit1, int1))
 
 summary(data_dist_edu_bmi)
+nrow(data_dist_edu_bmi)
 
 # Save the life-course hypotheses and covariates as a matrix
 x_hypos <- data_dist_edu_bmi %>%
@@ -2531,28 +2279,12 @@ mod_dist_edu_bmi
 # Plot these results
 plot(mod_dist_edu_bmi)
 
-# Look at the variables included at each step
-coef(mod_dist_edu_bmi, s = max(mod_dist_edu_bmi$lambda[mod_dist_edu_bmi$df == 4])); min(mod_dist_edu_bmi$dev.ratio[mod_dist_edu_bmi$df == 4])
-
-coef(mod_dist_edu_bmi, s = max(mod_dist_edu_bmi$lambda[mod_dist_edu_bmi$df == 7])); min(mod_dist_edu_bmi$dev.ratio[mod_dist_edu_bmi$df == 7])
-
-coef(mod_dist_edu_bmi, s = max(mod_dist_edu_bmi$lambda[mod_dist_edu_bmi$df == 8])); min(mod_dist_edu_bmi$dev.ratio[mod_dist_edu_bmi$df == 8])
-
-coef(mod_dist_edu_bmi, s = max(mod_dist_edu_bmi$lambda[mod_dist_edu_bmi$df == 9])); min(mod_dist_edu_bmi$dev.ratio[mod_dist_edu_bmi$df == 9])
-
 
 ### Visual inspection of results (although just looking at the deviance ratios there doesn't seem to be much of an effect of access to green space at all)
 
 # First, use the 'lasso-table' function defined above to pick out the changes in variables and the increment in deviance ratio
 df <- lasso_table(mod_dist_edu_bmi)
 df
-
-
-# Make a plot of deviance ratio by lambda value, to show the time variables were entered and the improvement in model fit. This makes it clearer when different variables were added (not the neatest plot, though, as variables bunch up and overlap as lambda approaches 0...). Also, need to be careful about scale of y-axis, as improvement in model fit may not that large.
-plot(mod_dist_edu_bmi$lambda, mod_dist_edu_bmi$dev.ratio, type = "l",
-     xlab = "Lambda value", ylab = "Deviance ratio", 
-     xlim = rev(range(mod_dist_edu_bmi$lambda)), ylim = c(0, max(mod_dist_edu_bmi$dev.ratio)))
-text(df$Lambda, 0, labels = df$Variables, srt = 90, adj = 0)
 
 ## Put lambda on the log scale, else differences between early models inflated, as lambda decreases on log scale. This does make the plot slightly more readable, and groups early-included variables closer together
 mod_dist_edu_bmi$log_lambda <- log(mod_dist_edu_bmi$lambda)
@@ -2561,15 +2293,14 @@ mod_dist_edu_bmi
 df$log_lambda <- log(as.numeric(df$Lambda))
 df
 
-
-# This looks better, although same issues as above re. interpreting the first variable added (doesn't mean is a strong predictor of outcome).
+# Make plot
 plot(mod_dist_edu_bmi$log_lambda, mod_dist_edu_bmi$dev.ratio, type = "l",
      xlab = "Log lambda value", ylab = "Deviance ratio", 
      xlim = rev(range(mod_dist_edu_bmi$log_lambda)), ylim = c(0.007, max(mod_dist_edu_bmi$dev.ratio)))
 text(df$log_lambda, 0.007, labels = df$Variables, srt = 90, adj = 0)
 
 # save this plot
-pdf(file = "LogLambdaPlot_distanceEduBMI.pdf", height = 7, width = 11)
+pdf(file = "LogLambdaPlot_distanceEduBMI.pdf", height = 6, width = 10)
 plot(mod_dist_edu_bmi$log_lambda, mod_dist_edu_bmi$dev.ratio, type = "l",
      xlab = "Log lambda value", ylab = "Deviance ratio", 
      xlim = rev(range(mod_dist_edu_bmi$log_lambda)), ylim = c(0.007, max(mod_dist_edu_bmi$dev.ratio)))
@@ -2615,6 +2346,7 @@ data_dist_edu_overweight <- data_dist_edu %>%
   filter(complete.cases(overweight, age_f7, male, white, edu, crit1, int1))
 
 summary(data_dist_edu_overweight)
+nrow(data_dist_edu_overweight)
 
 # Save the life-course hypotheses and covariates as a matrix
 x_hypos <- data_dist_edu_overweight %>%
@@ -2637,30 +2369,11 @@ mod_dist_edu_over
 # Plot these results
 plot(mod_dist_edu_over)
 
-# Look at the variables included at each step
-coef(mod_dist_edu_over, s = max(mod_dist_edu_over$lambda[mod_dist_edu_over$df == 4])); min(mod_dist_edu_over$dev.ratio[mod_dist_edu_over$df == 4])
-
-coef(mod_dist_edu_over, s = max(mod_dist_edu_over$lambda[mod_dist_edu_over$df == 5])); min(mod_dist_edu_over$dev.ratio[mod_dist_edu_over$df == 5])
-
-coef(mod_dist_edu_over, s = max(mod_dist_edu_over$lambda[mod_dist_edu_over$df == 6])); min(mod_dist_edu_over$dev.ratio[mod_dist_edu_over$df == 6])
-
-coef(mod_dist_edu_over, s = max(mod_dist_edu_over$lambda[mod_dist_edu_over$df == 7])); min(mod_dist_edu_over$dev.ratio[mod_dist_edu_over$df == 7])
-
-
 ### Visual inspection of results (although just looking at the deviance ratios there doesn't seem to be much of an effect of access to green space at all)
 
 # First, use the 'lasso-table' function defined above to pick out the changes in variables and the increment in deviance ratio
 df <- lasso_table(mod_dist_edu_over)
 df
-
-
-
-# Make a plot of deviance ratio by lambda value, to show the time variables were entered and the improvement in model fit. Need to be careful about scale of y-axis, as improvement in model fit may not that large.
-plot(mod_dist_edu_over$lambda, mod_dist_edu_over$dev.ratio, type = "l",
-     xlab = "Lambda value", ylab = "Deviance ratio", 
-     xlim = rev(range(mod_dist_edu_over$lambda)), ylim = c(0, max(mod_dist_edu_over$dev.ratio)))
-text(df$Lambda, 0, labels = df$Variables, srt = 90, adj = 0)
-
 
 ## Put lambda on the log scale, else differences between early models inflated, as lambda decreases on log scale. This does make the plot slightly more readable, and groups early-included variables closer together
 mod_dist_edu_over$log_lambda <- log(mod_dist_edu_over$lambda)
@@ -2669,14 +2382,14 @@ mod_dist_edu_over
 df$log_lambda <- log(as.numeric(df$Lambda))
 df
 
-# This looks better, although same issues as above re. interpreting the first variable added (doesn't mean is a strong predictor of outcome).
+# Make the plot
 plot(mod_dist_edu_over$log_lambda, mod_dist_edu_over$dev.ratio, type = "l",
      xlab = "Log lambda value", ylab = "Deviance ratio", 
      xlim = rev(range(mod_dist_edu_over$log_lambda)), ylim = c(0.001, max(mod_dist_edu_over$dev.ratio)))
 text(df$log_lambda, 0.001, labels = df$Variables, srt = 90, adj = 0)
 
 # save this plot
-pdf(file = "LogLambdaPlot_distanceEduOverweight.pdf", height = 7, width = 11)
+pdf(file = "LogLambdaPlot_distanceEduOverweight.pdf", height = 6, width = 10)
 plot(mod_dist_edu_over$log_lambda, mod_dist_edu_over$dev.ratio, type = "l",
      xlab = "Log lambda value", ylab = "Deviance ratio", 
      xlim = rev(range(mod_dist_edu_over$log_lambda)), ylim = c(0.001, max(mod_dist_edu_over$dev.ratio)))
@@ -2722,6 +2435,7 @@ data_dist_edu_sysBP <- data_dist_edu %>%
   filter(complete.cases(sysBP, age_f7, male, white, edu, crit1, int1))
 
 summary(data_dist_edu_sysBP)
+nrow(data_dist_edu_sysBP)
 
 # Save the life-course hypotheses and covariates as a matrix
 x_hypos <- data_dist_edu_sysBP %>%
@@ -2744,27 +2458,12 @@ mod_dist_edu_sysBP
 # Plot these results
 plot(mod_dist_edu_sysBP)
 
-# Look at the variables included at each step
-coef(mod_dist_edu_sysBP, s = max(mod_dist_edu_sysBP$lambda[mod_dist_edu_sysBP$df == 4])); min(mod_dist_edu_sysBP$dev.ratio[mod_dist_edu_sysBP$df == 4])
-
-coef(mod_dist_edu_sysBP, s = max(mod_dist_edu_sysBP$lambda[mod_dist_edu_sysBP$df == 6])); min(mod_dist_edu_sysBP$dev.ratio[mod_dist_edu_sysBP$df == 6])
-
-coef(mod_dist_edu_sysBP, s = max(mod_dist_edu_sysBP$lambda[mod_dist_edu_sysBP$df == 7])); min(mod_dist_edu_sysBP$dev.ratio[mod_dist_edu_sysBP$df == 7])
-
 
 ### Visual inspection of results (although just looking at the deviance ratios there doesn't seem to be much of an effect of access to green space at all)
 
 # First, use the 'lasso-table' function defined above to pick out the changes in variables and the increment in deviance ratio
 df <- lasso_table(mod_dist_edu_sysBP)
 df
-
-
-# Make a plot of deviance ratio by lambda value, to show the time variables were entered and the improvement in model fit. Need to be careful about scale of y-axis, as improvement in model fit may not that large.
-plot(mod_dist_edu_sysBP$lambda, mod_dist_edu_sysBP$dev.ratio, type = "l",
-     xlab = "Lambda value", ylab = "Deviance ratio", 
-     xlim = rev(range(mod_dist_edu_sysBP$lambda)), ylim = c(0, max(mod_dist_edu_sysBP$dev.ratio)))
-text(df$Lambda, 0, labels = df$Variables, srt = 90, adj = 0)
-
 
 ## Put lambda on the log scale, else differences between early models inflated, as lambda decreases on log scale. This does make the plot slightly more readable, and groups early-included variables closer together
 mod_dist_edu_sysBP$log_lambda <- log(mod_dist_edu_sysBP$lambda)
@@ -2773,14 +2472,14 @@ mod_dist_edu_sysBP
 df$log_lambda <- log(as.numeric(df$Lambda))
 df
 
-# This looks better, although same issues as above re. interpreting the first variable added (doesn't mean is a strong predictor of outcome).
+# Make the plot
 plot(mod_dist_edu_sysBP$log_lambda, mod_dist_edu_sysBP$dev.ratio, type = "l",
      xlab = "Log lambda value", ylab = "Deviance ratio", 
      xlim = rev(range(mod_dist_edu_sysBP$log_lambda)), ylim = c(0.005, max(mod_dist_edu_sysBP$dev.ratio)))
 text(df$log_lambda, 0.005, labels = df$Variables, srt = 90, adj = 0)
 
 # save this plot
-pdf(file = "LogLambdaPlot_distanceEduSysBP.pdf", height = 7, width = 11)
+pdf(file = "LogLambdaPlot_distanceEduSysBP.pdf", height = 6, width = 10)
 plot(mod_dist_edu_sysBP$log_lambda, mod_dist_edu_sysBP$dev.ratio, type = "l",
      xlab = "Log lambda value", ylab = "Deviance ratio", 
      xlim = rev(range(mod_dist_edu_sysBP$log_lambda)), ylim = c(0.005, max(mod_dist_edu_sysBP$dev.ratio)))
@@ -2788,22 +2487,24 @@ text(df$log_lambda, 0.005, labels = df$Variables, srt = 90, adj = 0)
 dev.off()
 
 
-## From these results, would seem to be that nothing is really going on here - Will do a likelihood ratio test to see whether inclusion of first parameter(s) added (crit2 and int3) increases model fit of standard linear regression model
+## From these results, would seem to be that nothing is really going on here - Will do a likelihood ratio test to see whether inclusion of first parameter(s) added (int3) increases model fit of standard linear regression model
 base_mod <- lm(data_dist_edu_sysBP$sysBP ~ x_hypos[, "age_f7"] + x_hypos[, "male"] + x_hypos[, "white"] + 
                  x_hypos[, "edu"])
 summary(base_mod)
 
 param1_mod <- lm(data_dist_edu_sysBP$sysBP ~ x_hypos[, "age_f7"] + x_hypos[, "male"] + 
-                   x_hypos[, "white"] + x_hypos[, "edu"] + x_hypos[, "crit2"] + x_hypos[, "int3"])
+                   x_hypos[, "white"] + x_hypos[, "edu"] + x_hypos[, "int3"])
 summary(param1_mod)
 
-# Is potentially a weak effect of crit2 and int3, with higher average distance associated with ever-so-marginally lower systolic blood pressure, which may be stronger in those with more education (but effect is so marginal, and in opposite direction to what would be expected, may just be latching on to random noise in the data).
+# Is potentially a weak effect of int3, with greater distance at age 7 associated with ever-so-marginally lower systolic blood pressure if high parental education (but effect is so marginal, opposite to expected direction, and inconsistent with other results, may just be latching on to random noise in the data).
 anova(base_mod, param1_mod)
 
-# What about adding next variable (crit1)? No.
+coef(summary(param1_mod))
+confint(param1_mod)
+
+# What about adding next variable (int1)? No.
 param2_mod <- lm(data_dist_edu_sysBP$sysBP ~ x_hypos[, "age_f7"] + x_hypos[, "male"] + 
-                   x_hypos[, "white"] + x_hypos[, "edu"] + x_hypos[, "crit2"] + x_hypos[, "int3"] + 
-                   x_hypos[, "crit1"])
+                   x_hypos[, "white"] + x_hypos[, "edu"] + x_hypos[, "int3"] + x_hypos[, "int1"])
 summary(param2_mod)
 
 anova(param1_mod, param2_mod)
@@ -2817,7 +2518,7 @@ mod.cv
 # Plot the log lambda by MSE to show both 'optimal' and '1SE' models (number of parameters is at top of plot)
 plot(mod.cv) 
 
-# Parameters in the 1SE and 'optimal' models - The 1SE model just contains just the 4 parameters included by default (age, sex, ethnicity and education), suggesting no association with distance to green space exposure; while the minimal model includes 11 parameters, but the MSE is practically identical to the null model
+# Parameters in the 1SE and 'optimal' models - The 1SE model just contains just the 4 parameters included by default (age, sex, ethnicity and education), suggesting no association with distance to green space exposure; while the minimal model includes 6 parameters, but the MSE is practically identical to the null model
 coef(mod.cv, s = mod.cv$lambda.1se)
 coef(mod.cv, s = mod.cv$lambda.min)
 
@@ -2834,6 +2535,7 @@ data_dist_edu_diaBP <- data_dist_edu %>%
   filter(complete.cases(diaBP, age_f7, male, white, edu, crit1, int1))
 
 summary(data_dist_edu_diaBP)
+nrow(data_dist_edu_diaBP)
 
 # Save the life-course hypotheses and covariates as a matrix
 x_hypos <- data_dist_edu_diaBP %>%
@@ -2856,29 +2558,12 @@ mod_dist_edu_diaBP
 # Plot these results
 plot(mod_dist_edu_diaBP)
 
-# Look at the variables included at each step
-coef(mod_dist_edu_diaBP, s = max(mod_dist_edu_diaBP$lambda[mod_dist_edu_diaBP$df == 4])); min(mod_dist_edu_diaBP$dev.ratio[mod_dist_edu_diaBP$df == 4])
-
-coef(mod_dist_edu_diaBP, s = max(mod_dist_edu_diaBP$lambda[mod_dist_edu_diaBP$df == 5])); min(mod_dist_edu_diaBP$dev.ratio[mod_dist_edu_diaBP$df == 5])
-
-coef(mod_dist_edu_diaBP, s = max(mod_dist_edu_diaBP$lambda[mod_dist_edu_diaBP$df == 6])); min(mod_dist_edu_diaBP$dev.ratio[mod_dist_edu_diaBP$df == 6])
-
-coef(mod_dist_edu_diaBP, s = max(mod_dist_edu_diaBP$lambda[mod_dist_edu_diaBP$df == 7])); min(mod_dist_edu_diaBP$dev.ratio[mod_dist_edu_diaBP$df == 7])
-
 
 ### Visual inspection of results (although just looking at the deviance ratios there doesn't seem to be much of an effect of access to green space at all)
 
 # First, use the 'lasso-table' function defined above to pick out the changes in variables and the increment in deviance ratio
 df <- lasso_table(mod_dist_edu_diaBP)
 df
-
-
-# Make a plot of deviance ratio by lambda value, to show the time variables were entered and the improvement in model fit. Need to be careful about scale of y-axis, as improvement in model fit may not that large.
-plot(mod_dist_edu_diaBP$lambda, mod_dist_edu_diaBP$dev.ratio, type = "l",
-     xlab = "Lambda value", ylab = "Deviance ratio", 
-     xlim = rev(range(mod_dist_edu_diaBP$lambda)), ylim = c(0, max(mod_dist_edu_diaBP$dev.ratio)))
-text(df$Lambda, 0, labels = df$Variables, srt = 90, adj = 0)
-
 
 ## Put lambda on the log scale, else differences between early models inflated, as lambda decreases on log scale. This does make the plot slightly more readable, and groups early-included variables closer together
 mod_dist_edu_diaBP$log_lambda <- log(mod_dist_edu_diaBP$lambda)
@@ -2887,14 +2572,14 @@ mod_dist_edu_diaBP
 df$log_lambda <- log(as.numeric(df$Lambda))
 df
 
-# This looks better, although same issues as above re. interpreting the first variable added (doesn't mean is a strong predictor of outcome). No obvious strong effects
+# Make the plot
 plot(mod_dist_edu_diaBP$log_lambda, mod_dist_edu_diaBP$dev.ratio, type = "l",
      xlab = "Log lambda value", ylab = "Deviance ratio", 
      xlim = rev(range(mod_dist_edu_diaBP$log_lambda)), ylim = c(0.005, max(mod_dist_edu_diaBP$dev.ratio)))
 text(df$log_lambda, 0.005, labels = df$Variables, srt = 90, adj = 0)
 
 # save this plot
-pdf(file = "LogLambdaPlot_distanceEduDiaBP.pdf", height = 7, width = 11)
+pdf(file = "LogLambdaPlot_distanceEduDiaBP.pdf", height = 6, width = 10)
 plot(mod_dist_edu_diaBP$log_lambda, mod_dist_edu_diaBP$dev.ratio, type = "l",
      xlab = "Log lambda value", ylab = "Deviance ratio", 
      xlim = rev(range(mod_dist_edu_diaBP$log_lambda)), ylim = c(0.005, max(mod_dist_edu_diaBP$dev.ratio)))
@@ -2949,39 +2634,45 @@ data_dist <- data
 
 # Critical period at first time point only
 data_dist$crit1 <- data_dist$greenDist_preg
+data_dist$crit1 <- data_dist$crit1 - mean(data_dist$crit1, na.rm = TRUE)
 
 # Interaction between SEP and first time point
-data_dist$int1 <- data_dist$deprived * data_dist$greenDist_preg
+data_dist$int1 <- data_dist$deprived * data_dist$crit1
 
 # Critical period at second time point only
 data_dist$crit2 <- data_dist$greenDist_4
+data_dist$crit2 <- data_dist$crit2 - mean(data_dist$crit2, na.rm = TRUE)
 
 # Interaction between SEP and second time point
-data_dist$int2 <- data_dist$deprived * data_dist$greenDist_4
+data_dist$int2 <- data_dist$deprived * data_dist$crit2
 
 # Critical period at third time point only
 data_dist$crit3 <- data_dist$greenDist_7
+data_dist$crit3 <- data_dist$crit3 - mean(data_dist$crit3, na.rm = TRUE)
 
 # Interaction between SEP and third time point
-data_dist$int3 <- data_dist$deprived * data_dist$greenDist_7
+data_dist$int3 <- data_dist$deprived * data_dist$crit3
 
 # Linear accumulation of all exposures
 data_dist$accumulation <- (data_dist$greenDist_preg + data_dist$greenDist_4 + data_dist$greenDist_7) / 3
+data_dist$accumulation <- data_dist$accumulation - mean(data_dist$accumulation, na.rm = TRUE)
 
 # Interaction between SEP and cumulative exposure
 data_dist$int_accum <- data_dist$deprived * data_dist$accumulation
 
 # Change in distance to green space between time 1 to time 2
 data_dist$green_ch12 <- data_dist$greenDist_4 - data_dist$greenDist_preg
+data_dist$green_ch12 <- data_dist$green_ch12 - mean(data_dist$green_ch12, na.rm = TRUE)
 
 # Change in distance to green space between time 1 to time 2, with an interaction with SEP
-data_dist$green_ch12_int <- (data_dist$greenDist_4 - data_dist$greenDist_preg) * data_dist$deprived
+data_dist$green_ch12_int <- data_dist$green_ch12 * data_dist$deprived
 
 # Change in distance to green space between time 2 to time 3
 data_dist$green_ch23 <- data_dist$greenDist_7 - data_dist$greenDist_4
+data_dist$green_ch23 <- data_dist$green_ch23 - mean(data_dist$green_ch23, na.rm = TRUE)
 
 # Change in distance to green space between time 2 to time 3, with an interaction with SEP
-data_dist$green_ch23_int <- (data_dist$greenDist_7 - data_dist$greenDist_4) * data_dist$deprived
+data_dist$green_ch23_int <- data_dist$green_ch23 * data_dist$deprived
 
 
 ## Make a dataset just with the outcomes, exposure hypotheses and covariates
@@ -3000,6 +2691,7 @@ data_dist_dep_bmi <- data_dist_dep %>%
   filter(complete.cases(BMI_f7, age_f7, male, white, deprived, crit1, int1))
 
 summary(data_dist_dep_bmi)
+nrow(data_dist_dep_bmi)
 
 # Save the life-course hypotheses and covariates as a matrix
 x_hypos <- data_dist_dep_bmi %>%
@@ -3034,28 +2726,12 @@ mod_dist_dep_bmi
 # Plot these results
 plot(mod_dist_dep_bmi)
 
-# Look at the variables included at each step
-coef(mod_dist_dep_bmi, s = max(mod_dist_dep_bmi$lambda[mod_dist_dep_bmi$df == 4])); min(mod_dist_dep_bmi$dev.ratio[mod_dist_dep_bmi$df == 4])
-
-coef(mod_dist_dep_bmi, s = max(mod_dist_dep_bmi$lambda[mod_dist_dep_bmi$df == 5])); min(mod_dist_dep_bmi$dev.ratio[mod_dist_dep_bmi$df == 5])
-
-coef(mod_dist_dep_bmi, s = max(mod_dist_dep_bmi$lambda[mod_dist_dep_bmi$df == 6])); min(mod_dist_dep_bmi$dev.ratio[mod_dist_dep_bmi$df == 6])
-
-coef(mod_dist_dep_bmi, s = max(mod_dist_dep_bmi$lambda[mod_dist_dep_bmi$df == 7])); min(mod_dist_dep_bmi$dev.ratio[mod_dist_dep_bmi$df == 7])
-
 
 ### Visual inspection of results (although just looking at the deviance ratios there doesn't seem to be much of an effect of access to green space at all)
 
 # First, use the 'lasso-table' function defined above to pick out the changes in variables and the increment in deviance ratio
 df <- lasso_table(mod_dist_dep_bmi)
 df
-
-
-# Make a plot of deviance ratio by lambda value, to show the time variables were entered and the improvement in model fit. This makes it clearer when different variables were added (not the neatest plot, though, as variables bunch up and overlap as lambda approaches 0...). Also, need to be careful about scale of y-axis, as improvement in model fit may not that large.
-plot(mod_dist_dep_bmi$lambda, mod_dist_dep_bmi$dev.ratio, type = "l",
-     xlab = "Lambda value", ylab = "Deviance ratio", 
-     xlim = rev(range(mod_dist_dep_bmi$lambda)), ylim = c(0, max(mod_dist_dep_bmi$dev.ratio)))
-text(df$Lambda, 0, labels = df$Variables, srt = 90, adj = 0)
 
 ## Put lambda on the log scale, else differences between early models inflated, as lambda decreases on log scale. This does make the plot slightly more readable, and groups early-included variables closer together
 mod_dist_dep_bmi$log_lambda <- log(mod_dist_dep_bmi$lambda)
@@ -3064,15 +2740,14 @@ mod_dist_dep_bmi
 df$log_lambda <- log(as.numeric(df$Lambda))
 df
 
-
-# This looks better, although same issues as above re. interpreting the first variable added (doesn't mean is a strong predictor of outcome).
+# Make the plot
 plot(mod_dist_dep_bmi$log_lambda, mod_dist_dep_bmi$dev.ratio, type = "l",
      xlab = "Log lambda value", ylab = "Deviance ratio", 
      xlim = rev(range(mod_dist_dep_bmi$log_lambda)), ylim = c(0.008, max(mod_dist_dep_bmi$dev.ratio)))
 text(df$log_lambda, 0.008, labels = df$Variables, srt = 90, adj = 0)
 
 # save this plot
-pdf(file = "LogLambdaPlot_distanceDepBMI.pdf", height = 7, width = 11)
+pdf(file = "LogLambdaPlot_distanceDepBMI.pdf", height = 6, width = 10)
 plot(mod_dist_dep_bmi$log_lambda, mod_dist_dep_bmi$dev.ratio, type = "l",
      xlab = "Log lambda value", ylab = "Deviance ratio", 
      xlim = rev(range(mod_dist_dep_bmi$log_lambda)), ylim = c(0.008, max(mod_dist_dep_bmi$dev.ratio)))
@@ -3101,8 +2776,7 @@ mod.cv
 # Plot the log lambda by MSE to show both 'optimal' and '1SE' models (number of parameters is at the top of the plot)
 plot(mod.cv) 
 
-# Parameters in the 1SE and 'optimal' models - The 1SE model just contains just the 4 parameters included by default (age, sex, ethnicity and education), suggesting no association with distance to green space exposure; while the minimal MSE model contains 6 parameters, the difference in MSE to the null model is practically nothing.
-coef(mod.cv, s = mod.cv$lambda.1se)
+# Parameters in the 1SE and 'optimal' models - Both models just contain the 4 parameters included by default (age, sex, ethnicity and education), suggesting no association with distance to green space exposure
 coef(mod.cv, s = mod.cv$lambda.min)
 
 
@@ -3118,6 +2792,7 @@ data_dist_dep_overweight <- data_dist_dep %>%
   filter(complete.cases(overweight, age_f7, male, white, deprived, crit1, int1))
 
 summary(data_dist_dep_overweight)
+nrow(data_dist_dep_overweight)
 
 # Save the life-course hypotheses and covariates as a matrix
 x_hypos <- data_dist_dep_overweight %>%
@@ -3140,27 +2815,12 @@ mod_dist_dep_over
 # Plot these results
 plot(mod_dist_dep_over)
 
-# Look at the variables included at each step
-coef(mod_dist_dep_over, s = max(mod_dist_dep_over$lambda[mod_dist_dep_over$df == 4])); min(mod_dist_dep_over$dev.ratio[mod_dist_dep_over$df == 4])
-
-coef(mod_dist_dep_over, s = max(mod_dist_dep_over$lambda[mod_dist_dep_over$df == 5])); min(mod_dist_dep_over$dev.ratio[mod_dist_dep_over$df == 5])
-
-coef(mod_dist_dep_over, s = max(mod_dist_dep_over$lambda[mod_dist_dep_over$df == 6])); min(mod_dist_dep_over$dev.ratio[mod_dist_dep_over$df == 6])
-
 
 ### Visual inspection of results (although just looking at the deviance ratios there doesn't seem to be much of an effect of access to green space at all)
 
 # First, use the 'lasso-table' function defined above to pick out the changes in variables and the increment in deviance ratio
 df <- lasso_table(mod_dist_dep_over)
 df
-
-
-# Make a plot of deviance ratio by lambda value, to show the time variables were entered and the improvement in model fit. Need to be careful about scale of y-axis, as improvement in model fit may not that large.
-plot(mod_dist_dep_over$lambda, mod_dist_dep_over$dev.ratio, type = "l",
-     xlab = "Lambda value", ylab = "Deviance ratio", 
-     xlim = rev(range(mod_dist_dep_over$lambda)), ylim = c(0, max(mod_dist_dep_over$dev.ratio)))
-text(df$Lambda, 0, labels = df$Variables, srt = 90, adj = 0)
-
 
 ## Put lambda on the log scale, else differences between early models inflated, as lambda decreases on log scale. This does make the plot slightly more readable, and groups early-included variables closer together
 mod_dist_dep_over$log_lambda <- log(mod_dist_dep_over$lambda)
@@ -3169,14 +2829,14 @@ mod_dist_dep_over
 df$log_lambda <- log(as.numeric(df$Lambda))
 df
 
-# This looks better, although same issues as above re. interpreting the first variable added (doesn't mean is a strong predictor of outcome).
+# Make the plot
 plot(mod_dist_dep_over$log_lambda, mod_dist_dep_over$dev.ratio, type = "l",
      xlab = "Log lambda value", ylab = "Deviance ratio", 
      xlim = rev(range(mod_dist_dep_over$log_lambda)), ylim = c(0.001, max(mod_dist_dep_over$dev.ratio)))
 text(df$log_lambda, 0.001, labels = df$Variables, srt = 90, adj = 0)
 
 # save this plot
-pdf(file = "LogLambdaPlot_distanceDepOverweight.pdf", height = 7, width = 11)
+pdf(file = "LogLambdaPlot_distanceDepOverweight.pdf", height = 6, width = 10)
 plot(mod_dist_dep_over$log_lambda, mod_dist_dep_over$dev.ratio, type = "l",
      xlab = "Log lambda value", ylab = "Deviance ratio", 
      xlim = rev(range(mod_dist_dep_over$log_lambda)), ylim = c(0.001, max(mod_dist_dep_over$dev.ratio)))
@@ -3223,6 +2883,7 @@ data_dist_dep_sysBP <- data_dist_dep %>%
   filter(complete.cases(sysBP, age_f7, male, white, deprived, crit1, int1))
 
 summary(data_dist_dep_sysBP)
+nrow(data_dist_dep_sysBP)
 
 # Save the life-course hypotheses and covariates as a matrix
 x_hypos <- data_dist_dep_sysBP %>%
@@ -3245,29 +2906,12 @@ mod_dist_dep_sysBP
 # Plot these results
 plot(mod_dist_dep_sysBP)
 
-# Look at the variables included at each step
-coef(mod_dist_dep_sysBP, s = max(mod_dist_dep_sysBP$lambda[mod_dist_dep_sysBP$df == 4])); min(mod_dist_dep_sysBP$dev.ratio[mod_dist_dep_sysBP$df == 4])
-
-coef(mod_dist_dep_sysBP, s = max(mod_dist_dep_sysBP$lambda[mod_dist_dep_sysBP$df == 5])); min(mod_dist_dep_sysBP$dev.ratio[mod_dist_dep_sysBP$df == 5])
-
-coef(mod_dist_dep_sysBP, s = max(mod_dist_dep_sysBP$lambda[mod_dist_dep_sysBP$df == 6])); min(mod_dist_dep_sysBP$dev.ratio[mod_dist_dep_sysBP$df == 6])
-
-coef(mod_dist_dep_sysBP, s = max(mod_dist_dep_sysBP$lambda[mod_dist_dep_sysBP$df == 7])); min(mod_dist_dep_sysBP$dev.ratio[mod_dist_dep_sysBP$df == 7])
-
 
 ### Visual inspection of results (although just looking at the deviance ratios there doesn't seem to be much of an effect of access to green space at all)
 
 # First, use the 'lasso-table' function defined above to pick out the changes in variables and the increment in deviance ratio
 df <- lasso_table(mod_dist_dep_sysBP)
 df
-
-
-# Make a plot of deviance ratio by lambda value, to show the time variables were entered and the improvement in model fit. Need to be careful about scale of y-axis, as improvement in model fit may not that large.
-plot(mod_dist_dep_sysBP$lambda, mod_dist_dep_sysBP$dev.ratio, type = "l",
-     xlab = "Lambda value", ylab = "Deviance ratio", 
-     xlim = rev(range(mod_dist_dep_sysBP$lambda)), ylim = c(0, max(mod_dist_dep_sysBP$dev.ratio)))
-text(df$Lambda, 0, labels = df$Variables, srt = 90, adj = 0)
-
 
 ## Put lambda on the log scale, else differences between early models inflated, as lambda decreases on log scale. This does make the plot slightly more readable, and groups early-included variables closer together
 mod_dist_dep_sysBP$log_lambda <- log(mod_dist_dep_sysBP$lambda)
@@ -3276,14 +2920,14 @@ mod_dist_dep_sysBP
 df$log_lambda <- log(as.numeric(df$Lambda))
 df
 
-# This looks better, although same issues as above re. interpreting the first variable added (doesn't mean is a strong predictor of outcome).
+# Make the plot
 plot(mod_dist_dep_sysBP$log_lambda, mod_dist_dep_sysBP$dev.ratio, type = "l",
      xlab = "Log lambda value", ylab = "Deviance ratio", 
      xlim = rev(range(mod_dist_dep_sysBP$log_lambda)), ylim = c(0.005, max(mod_dist_dep_sysBP$dev.ratio)))
 text(df$log_lambda, 0.005, labels = df$Variables, srt = 90, adj = 0)
 
 # save this plot
-pdf(file = "LogLambdaPlot_distanceDepSysBP.pdf", height = 7, width = 11)
+pdf(file = "LogLambdaPlot_distanceDepSysBP.pdf", height = 6, width = 10)
 plot(mod_dist_dep_sysBP$log_lambda, mod_dist_dep_sysBP$dev.ratio, type = "l",
      xlab = "Log lambda value", ylab = "Deviance ratio", 
      xlim = rev(range(mod_dist_dep_sysBP$log_lambda)), ylim = c(0.005, max(mod_dist_dep_sysBP$dev.ratio)))
@@ -3291,7 +2935,7 @@ text(df$log_lambda, 0.005, labels = df$Variables, srt = 90, adj = 0)
 dev.off()
 
 
-## From these results, would seem to be that not much is really going on here, although first variable eneterd (crit2) does appear to increase model fit marginally... - Will do a likelihood ratio test to see whether inclusion of first parameter(s) added (green_dec12) increases model fit of standard linear regression model
+## From these results, would seem to be that not much is really going on here, although first variable eneterd (crit2) does appear to increase model fit marginally... - Will do a likelihood ratio test to see whether inclusion of first parameter(s) added (crit2) increases model fit of standard linear regression model
 base_mod <- lm(data_dist_dep_sysBP$sysBP ~ x_hypos[, "age_f7"] + x_hypos[, "male"] + x_hypos[, "white"] + 
                  x_hypos[, "deprived"])
 summary(base_mod)
@@ -3302,6 +2946,9 @@ summary(param1_mod)
 
 # Does seem to be a marginal association here at best, with an increase in distance from space at time 2 associated with lower systolic BP. However, given that the effect size is tiny and interpretation not clear (why would increasing distance to green space be associated with lower BP?), this could just be the model hooking up to random noise.
 anova(base_mod, param1_mod)
+
+coef(summary(param1_mod))
+confint(param1_mod)
 
 # Does adding the next parameter (crit1) improve model fit? No.
 param2_mod <- lm(data_dist_dep_sysBP$sysBP ~ x_hypos[, "age_f7"] + x_hypos[, "male"] + 
@@ -3319,7 +2966,7 @@ mod.cv
 # Plot the log lambda by MSE to show both 'optimal' and '1SE' models (number of parameters is at top of plot)
 plot(mod.cv) 
 
-# Parameters in the 1SE and 'optimal' models - The 1SE model is just the null/covariate-only model, while the 'optimal'/lowest MSE model also contains crit1 and crit2. The difference in MSE is minimal, though, so not especially convincing. Suggests at best a very weak association with access to green space exposure
+# Parameters in the 1SE and 'optimal' models - Both models just contain the null/covariate-only hypotheses.
 coef(mod.cv, s = mod.cv$lambda.1se)
 coef(mod.cv, s = mod.cv$lambda.min)
 
@@ -3336,6 +2983,7 @@ data_dist_dep_diaBP <- data_dist_dep %>%
   filter(complete.cases(diaBP, age_f7, male, white, deprived, crit1, int1))
 
 summary(data_dist_dep_diaBP)
+nrow(data_dist_dep_diaBP)
 
 # Save the life-course hypotheses and covariates as a matrix
 x_hypos <- data_dist_dep_diaBP %>%
@@ -3358,29 +3006,12 @@ mod_dist_dep_diaBP
 # Plot these results
 plot(mod_dist_dep_diaBP)
 
-# Look at the variables included at each step
-coef(mod_dist_dep_diaBP, s = max(mod_dist_dep_diaBP$lambda[mod_dist_dep_diaBP$df == 4])); min(mod_dist_dep_diaBP$dev.ratio[mod_dist_dep_diaBP$df == 4])
-
-coef(mod_dist_dep_diaBP, s = max(mod_dist_dep_diaBP$lambda[mod_dist_dep_diaBP$df == 5])); min(mod_dist_dep_diaBP$dev.ratio[mod_dist_dep_diaBP$df == 5])
-
-coef(mod_dist_dep_diaBP, s = max(mod_dist_dep_diaBP$lambda[mod_dist_dep_diaBP$df == 6])); min(mod_dist_dep_diaBP$dev.ratio[mod_dist_dep_diaBP$df == 6])
-
-coef(mod_dist_dep_diaBP, s = max(mod_dist_dep_diaBP$lambda[mod_dist_dep_diaBP$df == 7])); min(mod_dist_dep_diaBP$dev.ratio[mod_dist_dep_diaBP$df == 7])
-
 
 ### Visual inspection of results (although just looking at the deviance ratios there doesn't seem to be much of an effect of access to green space at all)
 
 # First, use the 'lasso-table' function defined above to pick out the changes in variables and the increment in deviance ratio
 df <- lasso_table(mod_dist_dep_diaBP)
 df
-
-
-# Make a plot of deviance ratio by lambda value, to show the time variables were entered and the improvement in model fit. Need to be careful about scale of y-axis, as improvement in model fit may not that large.
-plot(mod_dist_dep_diaBP$lambda, mod_dist_dep_diaBP$dev.ratio, type = "l",
-     xlab = "Lambda value", ylab = "Deviance ratio", 
-     xlim = rev(range(mod_dist_dep_diaBP$lambda)), ylim = c(0, max(mod_dist_dep_diaBP$dev.ratio)))
-text(df$Lambda, 0, labels = df$Variables, srt = 90, adj = 0)
-
 
 ## Put lambda on the log scale, else differences between early models inflated, as lambda decreases on log scale. This does make the plot slightly more readable, and groups early-included variables closer together
 mod_dist_dep_diaBP$log_lambda <- log(mod_dist_dep_diaBP$lambda)
@@ -3389,14 +3020,14 @@ mod_dist_dep_diaBP
 df$log_lambda <- log(as.numeric(df$Lambda))
 df
 
-# This looks better, although same issues as above re. interpreting the first variable added (doesn't mean is a strong predictor of outcome).
+# Make the plot
 plot(mod_dist_dep_diaBP$log_lambda, mod_dist_dep_diaBP$dev.ratio, type = "l",
      xlab = "Log lambda value", ylab = "Deviance ratio", 
      xlim = rev(range(mod_dist_dep_diaBP$log_lambda)), ylim = c(0.005, max(mod_dist_dep_diaBP$dev.ratio)))
 text(df$log_lambda, 0.005, labels = df$Variables, srt = 90, adj = 0)
 
 # save this plot
-pdf(file = "LogLambdaPlot_distanceDepDiaBP.pdf", height = 7, width = 11)
+pdf(file = "LogLambdaPlot_distanceDepDiaBP.pdf", height = 6, width = 10)
 plot(mod_dist_dep_diaBP$log_lambda, mod_dist_dep_diaBP$dev.ratio, type = "l",
      xlab = "Log lambda value", ylab = "Deviance ratio", 
      xlim = rev(range(mod_dist_dep_diaBP$log_lambda)), ylim = c(0.005, max(mod_dist_dep_diaBP$dev.ratio)))
@@ -3404,13 +3035,13 @@ text(df$log_lambda, 0.005, labels = df$Variables, srt = 90, adj = 0)
 dev.off()
 
 
-## From these results, would seem to be that nothing is really going on here - Will do a likelihood ratio test to see whether inclusion of first parameter(s) added (green_ch12) increases model fit of standard linear regression model
+## From these results, would seem to be that nothing is really going on here - Will do a likelihood ratio test to see whether inclusion of first parameter(s) added (int3) increases model fit of standard linear regression model
 base_mod <- lm(data_dist_dep_diaBP$diaBP ~ x_hypos[, "age_f7"] + x_hypos[, "male"] + x_hypos[, "white"] + 
                  x_hypos[, "deprived"])
 summary(base_mod)
 
 param1_mod <- lm(data_dist_dep_diaBP$diaBP ~ x_hypos[, "age_f7"] + x_hypos[, "male"] + 
-                   x_hypos[, "white"] + x_hypos[, "deprived"] + x_hypos[, "green_ch12"])
+                   x_hypos[, "white"] + x_hypos[, "deprived"] + x_hypos[, "int3"])
 summary(param1_mod)
 
 # No association here
@@ -3452,39 +3083,45 @@ data_dist <- data
 
 # Critical period at first time point only
 data_dist$crit1 <- data_dist$greenDist_preg
+data_dist$crit1 <- data_dist$crit1 - mean(data_dist$crit1, na.rm = TRUE)
 
 # Interaction between SEP and first time point
-data_dist$int1 <- data_dist$lowIncome * data_dist$greenDist_preg
+data_dist$int1 <- data_dist$lowIncome * data_dist$crit1
 
 # Critical period at second time point only
 data_dist$crit2 <- data_dist$greenDist_4
+data_dist$crit2 <- data_dist$crit2 - mean(data_dist$crit2, na.rm = TRUE)
 
 # Interaction between SEP and second time point
-data_dist$int2 <- data_dist$lowIncome * data_dist$greenDist_4
+data_dist$int2 <- data_dist$lowIncome * data_dist$crit2
 
 # Critical period at third time point only
 data_dist$crit3 <- data_dist$greenDist_7
+data_dist$crit3 <- data_dist$crit3 - mean(data_dist$crit3, na.rm = TRUE)
 
 # Interaction between SEP and third time point
-data_dist$int3 <- data_dist$lowIncome * data_dist$greenDist_7
+data_dist$int3 <- data_dist$lowIncome * data_dist$crit3
 
 # Linear accumulation of all exposures
 data_dist$accumulation <- (data_dist$greenDist_preg + data_dist$greenDist_4 + data_dist$greenDist_7) / 3
+data_dist$accumulation <- data_dist$accumulation - mean(data_dist$accumulation, na.rm = TRUE)
 
 # Interaction between SEP and cumulative exposure
 data_dist$int_accum <- data_dist$lowIncome * data_dist$accumulation
 
 # Change in distance to green space between time 1 to time 2
 data_dist$green_ch12 <- data_dist$greenDist_4 - data_dist$greenDist_preg
+data_dist$green_ch12 <- data_dist$green_ch12 - mean(data_dist$green_ch12, na.rm = TRUE)
 
 # Change in distance to green space between time 1 to time 2, with an interaction with SEP
-data_dist$green_ch12_int <- (data_dist$greenDist_4 - data_dist$greenDist_preg) * data_dist$lowIncome
+data_dist$green_ch12_int <- data_dist$green_ch12 * data_dist$lowIncome
 
 # Change in distance to green space between time 2 to time 3
 data_dist$green_ch23 <- data_dist$greenDist_7 - data_dist$greenDist_4
+data_dist$green_ch23 <- data_dist$green_ch23 - mean(data_dist$green_ch23, na.rm = TRUE)
 
 # Change in distance to green space between time 2 to time 3, with an interaction with SEP
-data_dist$green_ch23_int <- (data_dist$greenDist_7 - data_dist$greenDist_4) * data_dist$lowIncome
+data_dist$green_ch23_int <- data_dist$green_ch23 * data_dist$lowIncome
 
 
 ## Make a dataset just with the outcomes, exposure hypotheses and covariates
@@ -3503,6 +3140,7 @@ data_dist_inc_bmi <- data_dist_inc %>%
   filter(complete.cases(BMI_f7, age_f7, male, white, lowIncome, crit1, int1))
 
 summary(data_dist_inc_bmi)
+nrow(data_dist_inc_bmi)
 
 # Save the life-course hypotheses and covariates as a matrix
 x_hypos <- data_dist_inc_bmi %>%
@@ -3537,28 +3175,12 @@ mod_dist_inc_bmi
 # Plot these results
 plot(mod_dist_inc_bmi)
 
-# Look at the variables included at each step
-coef(mod_dist_inc_bmi, s = max(mod_dist_inc_bmi$lambda[mod_dist_inc_bmi$df == 4])); min(mod_dist_inc_bmi$dev.ratio[mod_dist_inc_bmi$df == 4])
-
-coef(mod_dist_inc_bmi, s = max(mod_dist_inc_bmi$lambda[mod_dist_inc_bmi$df == 5])); min(mod_dist_inc_bmi$dev.ratio[mod_dist_inc_bmi$df == 5])
-
-coef(mod_dist_inc_bmi, s = max(mod_dist_inc_bmi$lambda[mod_dist_inc_bmi$df == 6])); min(mod_dist_inc_bmi$dev.ratio[mod_dist_inc_bmi$df == 6])
-
-coef(mod_dist_inc_bmi, s = max(mod_dist_inc_bmi$lambda[mod_dist_inc_bmi$df == 7])); min(mod_dist_inc_bmi$dev.ratio[mod_dist_inc_bmi$df == 7])
-
 
 ### Visual inspection of results (although just looking at the deviance ratios there doesn't seem to be much of an effect of access to green space at all)
 
 # First, use the 'lasso-table' function defined above to pick out the changes in variables and the increment in deviance ratio
 df <- lasso_table(mod_dist_inc_bmi)
 df
-
-
-# Make a plot of deviance ratio by lambda value, to show the time variables were entered and the improvement in model fit. This makes it clearer when different variables were added (not the neatest plot, though, as variables bunch up and overlap as lambda approaches 0...). Also, need to be careful about scale of y-axis, as improvement in model fit may not that large.
-plot(mod_dist_inc_bmi$lambda, mod_dist_inc_bmi$dev.ratio, type = "l",
-     xlab = "Lambda value", ylab = "Deviance ratio", 
-     xlim = rev(range(mod_dist_inc_bmi$lambda)), ylim = c(0, max(mod_dist_inc_bmi$dev.ratio)))
-text(df$Lambda, 0, labels = df$Variables, srt = 90, adj = 0)
 
 ## Put lambda on the log scale, else differences between early models inflated, as lambda decreases on log scale. This does make the plot slightly more readable, and groups early-included variables closer together
 mod_dist_inc_bmi$log_lambda <- log(mod_dist_inc_bmi$lambda)
@@ -3567,15 +3189,14 @@ mod_dist_inc_bmi
 df$log_lambda <- log(as.numeric(df$Lambda))
 df
 
-
-# This looks better, although same issues as above re. interpreting the first variable added (doesn't mean is a strong predictor of outcome).
+# Make the plot
 plot(mod_dist_inc_bmi$log_lambda, mod_dist_inc_bmi$dev.ratio, type = "l",
      xlab = "Log lambda value", ylab = "Deviance ratio", 
      xlim = rev(range(mod_dist_inc_bmi$log_lambda)), ylim = c(0.006, max(mod_dist_inc_bmi$dev.ratio)))
 text(df$log_lambda, 0.006, labels = df$Variables, srt = 90, adj = 0)
 
 # save this plot
-pdf(file = "LogLambdaPlot_distanceIncomeBMI.pdf", height = 7, width = 11)
+pdf(file = "LogLambdaPlot_distanceIncomeBMI.pdf", height = 6, width = 10)
 plot(mod_dist_inc_bmi$log_lambda, mod_dist_inc_bmi$dev.ratio, type = "l",
      xlab = "Log lambda value", ylab = "Deviance ratio", 
      xlim = rev(range(mod_dist_inc_bmi$log_lambda)), ylim = c(0.006, max(mod_dist_inc_bmi$dev.ratio)))
@@ -3604,7 +3225,7 @@ mod.cv
 # Plot the log lambda by MSE to show both 'optimal' and '1SE' models (number of parameters is at the top of the plot)
 plot(mod.cv) 
 
-# Parameters in the 1SE and 'optimal' models - The 1SE model just contains just the 4 parameters included by default (age, sex, ethnicity and education), suggesting no association with distance to green space exposure; while the minimum MSE model also contains crit2, the difference in MSE is practically nil.
+# Parameters in the 1SE and 'optimal' models - Both models just contain just the 4 parameters included by default (age, sex, ethnicity and education), suggesting no association with distance to green space exposure
 coef(mod.cv, s = mod.cv$lambda.1se)
 coef(mod.cv, s = mod.cv$lambda.min)
 
@@ -3621,6 +3242,7 @@ data_dist_inc_overweight <- data_dist_inc %>%
   filter(complete.cases(overweight, age_f7, male, white, lowIncome, crit1, int1))
 
 summary(data_dist_inc_overweight)
+nrow(data_dist_inc_overweight)
 
 # Save the life-course hypotheses and covariates as a matrix
 x_hypos <- data_dist_inc_overweight %>%
@@ -3643,27 +3265,12 @@ mod_dist_inc_over
 # Plot these results
 plot(mod_dist_inc_over)
 
-# Look at the variables included at each step
-coef(mod_dist_inc_over, s = max(mod_dist_inc_over$lambda[mod_dist_inc_over$df == 4])); min(mod_dist_inc_over$dev.ratio[mod_dist_inc_over$df == 4])
-
-coef(mod_dist_inc_over, s = max(mod_dist_inc_over$lambda[mod_dist_inc_over$df == 5])); min(mod_dist_inc_over$dev.ratio[mod_dist_inc_over$df == 5])
-
-coef(mod_dist_inc_over, s = max(mod_dist_inc_over$lambda[mod_dist_inc_over$df == 6])); min(mod_dist_inc_over$dev.ratio[mod_dist_inc_over$df == 6])
-
 
 ### Visual inspection of results (although just looking at the deviance ratios there doesn't seem to be much of an effect of access to green space at all)
 
 # First, use the 'lasso-table' function defined above to pick out the changes in variables and the increment in deviance ratio
 df <- lasso_table(mod_dist_inc_over)
 df
-
-
-# Make a plot of deviance ratio by lambda value, to show the time variables were entered and the improvement in model fit. Need to be careful about scale of y-axis, as improvement in model fit may not that large.
-plot(mod_dist_inc_over$lambda, mod_dist_inc_over$dev.ratio, type = "l",
-     xlab = "Lambda value", ylab = "Deviance ratio", 
-     xlim = rev(range(mod_dist_inc_over$lambda)), ylim = c(0, max(mod_dist_inc_over$dev.ratio)))
-text(df$Lambda, 0, labels = df$Variables, srt = 90, adj = 0)
-
 
 ## Put lambda on the log scale, else differences between early models inflated, as lambda decreases on log scale. This does make the plot slightly more readable, and groups early-included variables closer together
 mod_dist_inc_over$log_lambda <- log(mod_dist_inc_over$lambda)
@@ -3672,7 +3279,7 @@ mod_dist_inc_over
 df$log_lambda <- log(as.numeric(df$Lambda))
 df
 
-# This looks better, although same issues as above re. interpreting the first variable added (doesn't mean is a strong predictor of outcome). (Have to add a bit of faff here to get y-axis to not display in scientific notation)
+# Make the plot (Have to add a bit of faff here to get y-axis to not display in scientific notation)
 plot(mod_dist_inc_over$log_lambda, mod_dist_inc_over$dev.ratio, type = "l",
      xlab = "Log lambda value", ylab = "Deviance ratio", yaxt = "n",
      xlim = rev(range(mod_dist_inc_over$log_lambda)), ylim = c(0.000, max(mod_dist_inc_over$dev.ratio)))
@@ -3680,7 +3287,7 @@ axis(2, at = c(0, 0.0001, 0.0002, 0.0003, 0.0004), labels = format(c(0, 0.0001, 
 text(df$log_lambda, 0.000, labels = df$Variables, srt = 90, adj = 0)
 
 # save this plot
-pdf(file = "LogLambdaPlot_distanceIncomeOverweight.pdf", height = 7, width = 11)
+pdf(file = "LogLambdaPlot_distanceIncomeOverweight.pdf", height = 6, width = 10)
 plot(mod_dist_inc_over$log_lambda, mod_dist_inc_over$dev.ratio, type = "l",
      xlab = "Log lambda value", ylab = "Deviance ratio", yaxt = "n",
      xlim = rev(range(mod_dist_inc_over$log_lambda)), ylim = c(0.000, max(mod_dist_inc_over$dev.ratio)))
@@ -3728,6 +3335,7 @@ data_dist_inc_sysBP <- data_dist_inc %>%
   filter(complete.cases(sysBP, age_f7, male, white, lowIncome, crit1, int1))
 
 summary(data_dist_inc_sysBP)
+nrow(data_dist_inc_sysBP)
 
 # Save the life-course hypotheses and covariates as a matrix
 x_hypos <- data_dist_inc_sysBP %>%
@@ -3750,29 +3358,12 @@ mod_dist_inc_sysBP
 # Plot these results
 plot(mod_dist_inc_sysBP)
 
-# Look at the variables included at each step
-coef(mod_dist_inc_sysBP, s = max(mod_dist_inc_sysBP$lambda[mod_dist_inc_sysBP$df == 4])); min(mod_dist_inc_sysBP$dev.ratio[mod_dist_inc_sysBP$df == 4])
-
-coef(mod_dist_inc_sysBP, s = max(mod_dist_inc_sysBP$lambda[mod_dist_inc_sysBP$df == 5])); min(mod_dist_inc_sysBP$dev.ratio[mod_dist_inc_sysBP$df == 5])
-
-coef(mod_dist_inc_sysBP, s = max(mod_dist_inc_sysBP$lambda[mod_dist_inc_sysBP$df == 6])); min(mod_dist_inc_sysBP$dev.ratio[mod_dist_inc_sysBP$df == 6])
-
-coef(mod_dist_inc_sysBP, s = max(mod_dist_inc_sysBP$lambda[mod_dist_inc_sysBP$df == 7])); min(mod_dist_inc_sysBP$dev.ratio[mod_dist_inc_sysBP$df == 7])
-
 
 ### Visual inspection of results (although just looking at the deviance ratios there doesn't seem to be much of an effect of access to green space at all)
 
 # First, use the 'lasso-table' function defined above to pick out the changes in variables and the increment in deviance ratio
 df <- lasso_table(mod_dist_inc_sysBP)
 df
-
-
-# Make a plot of deviance ratio by lambda value, to show the time variables were entered and the improvement in model fit. Need to be careful about scale of y-axis, as improvement in model fit may not that large.
-plot(mod_dist_inc_sysBP$lambda, mod_dist_inc_sysBP$dev.ratio, type = "l",
-     xlab = "Lambda value", ylab = "Deviance ratio", 
-     xlim = rev(range(mod_dist_inc_sysBP$lambda)), ylim = c(0, max(mod_dist_inc_sysBP$dev.ratio)))
-text(df$Lambda, 0, labels = df$Variables, srt = 90, adj = 0)
-
 
 ## Put lambda on the log scale, else differences between early models inflated, as lambda decreases on log scale. This does make the plot slightly more readable, and groups early-included variables closer together
 mod_dist_inc_sysBP$log_lambda <- log(mod_dist_inc_sysBP$lambda)
@@ -3781,14 +3372,14 @@ mod_dist_inc_sysBP
 df$log_lambda <- log(as.numeric(df$Lambda))
 df
 
-# This looks better, although same issues as above re. interpreting the first variable added (doesn't mean is a strong predictor of outcome).
+# Make the plot
 plot(mod_dist_inc_sysBP$log_lambda, mod_dist_inc_sysBP$dev.ratio, type = "l",
      xlab = "Log lambda value", ylab = "Deviance ratio", 
      xlim = rev(range(mod_dist_inc_sysBP$log_lambda)), ylim = c(0.004, max(mod_dist_inc_sysBP$dev.ratio)))
 text(df$log_lambda, 0.004, labels = df$Variables, srt = 90, adj = 0)
 
 # save this plot
-pdf(file = "LogLambdaPlot_distanceIncSysBP.pdf", height = 7, width = 11)
+pdf(file = "LogLambdaPlot_distanceIncomeSysBP.pdf", height = 6, width = 10)
 plot(mod_dist_inc_sysBP$log_lambda, mod_dist_inc_sysBP$dev.ratio, type = "l",
      xlab = "Log lambda value", ylab = "Deviance ratio", 
      xlim = rev(range(mod_dist_inc_sysBP$log_lambda)), ylim = c(0.004, max(mod_dist_inc_sysBP$dev.ratio)))
@@ -3796,7 +3387,7 @@ text(df$log_lambda, 0.004, labels = df$Variables, srt = 90, adj = 0)
 dev.off()
 
 
-## From these results, would seem to be that not much is really going on here (although potentially v. weak effect of crit2) - Will do a likelihood ratio test to see whether inclusion of first parameter(s) added (crit2 and accumulation) increases model fit of standard linear regression model
+## From these results, would seem to be that not much is really going on here - Will do a likelihood ratio test to see whether inclusion of first parameter(s) added (crit2 and accumulation) increases model fit of standard linear regression model
 base_mod <- lm(data_dist_inc_sysBP$sysBP ~ x_hypos[, "age_f7"] + x_hypos[, "male"] + x_hypos[, "white"] + 
                  x_hypos[, "lowIncome"])
 summary(base_mod)
@@ -3817,7 +3408,7 @@ mod.cv
 # Plot the log lambda by MSE to show both 'optimal' and '1SE' models (number of parameters is at top of plot)
 plot(mod.cv)
 
-# Parameters in the 1SE and 'optimal' models - Both just contains just the 4 parameters included by default (age, sex, ethnicity and education), suggesting no association with distance to green space exposure
+# Parameters in the 1SE and 'optimal' models - 1SE model just contains just the 4 parameters included by default (age, sex, ethnicity and education), suggesting no association with distance to green space exposure (although the minimum MSE model also contains 'crit2')
 coef(mod.cv, s = mod.cv$lambda.1se)
 coef(mod.cv, s = mod.cv$lambda.min)
 
@@ -3834,6 +3425,7 @@ data_dist_inc_diaBP <- data_dist_inc %>%
   filter(complete.cases(diaBP, age_f7, male, white, lowIncome, crit1, int1))
 
 summary(data_dist_inc_diaBP)
+nrow(data_dist_inc_diaBP)
 
 # Save the life-course hypotheses and covariates as a matrix
 x_hypos <- data_dist_inc_diaBP %>%
@@ -3856,29 +3448,12 @@ mod_dist_inc_diaBP
 # Plot these results
 plot(mod_dist_inc_diaBP)
 
-# Look at the variables included at each step
-coef(mod_dist_inc_diaBP, s = max(mod_dist_inc_diaBP$lambda[mod_dist_inc_diaBP$df == 4])); min(mod_dist_inc_diaBP$dev.ratio[mod_dist_inc_diaBP$df == 4])
-
-coef(mod_dist_inc_diaBP, s = max(mod_dist_inc_diaBP$lambda[mod_dist_inc_diaBP$df == 5])); min(mod_dist_inc_diaBP$dev.ratio[mod_dist_inc_diaBP$df == 5])
-
-coef(mod_dist_inc_diaBP, s = max(mod_dist_inc_diaBP$lambda[mod_dist_inc_diaBP$df == 6])); min(mod_dist_inc_diaBP$dev.ratio[mod_dist_inc_diaBP$df == 6])
-
-coef(mod_dist_inc_diaBP, s = max(mod_dist_inc_diaBP$lambda[mod_dist_inc_diaBP$df == 7])); min(mod_dist_inc_diaBP$dev.ratio[mod_dist_inc_diaBP$df == 7])
-
 
 ### Visual inspection of results (although just looking at the deviance ratios there doesn't seem to be much of an effect of access to green space at all)
 
 # First, use the 'lasso-table' function defined above to pick out the changes in variables and the increment in deviance ratio
 df <- lasso_table(mod_dist_inc_diaBP)
 df
-
-
-# Make a plot of deviance ratio by lambda value, to show the time variables were entered and the improvement in model fit. Need to be careful about scale of y-axis, as improvement in model fit may not that large.
-plot(mod_dist_inc_diaBP$lambda, mod_dist_inc_diaBP$dev.ratio, type = "l",
-     xlab = "Lambda value", ylab = "Deviance ratio", 
-     xlim = rev(range(mod_dist_inc_diaBP$lambda)), ylim = c(0, max(mod_dist_inc_diaBP$dev.ratio)))
-text(df$Lambda, 0, labels = df$Variables, srt = 90, adj = 0)
-
 
 ## Put lambda on the log scale, else differences between early models inflated, as lambda decreases on log scale. This does make the plot slightly more readable, and groups early-included variables closer together
 mod_dist_inc_diaBP$log_lambda <- log(mod_dist_inc_diaBP$lambda)
@@ -3887,17 +3462,17 @@ mod_dist_inc_diaBP
 df$log_lambda <- log(as.numeric(df$Lambda))
 df
 
-# This looks better, although same issues as above re. interpreting the first variable added (doesn't mean is a strong predictor of outcome).
+# Make the plot
 plot(mod_dist_inc_diaBP$log_lambda, mod_dist_inc_diaBP$dev.ratio, type = "l",
      xlab = "Log lambda value", ylab = "Deviance ratio", 
      xlim = rev(range(mod_dist_inc_diaBP$log_lambda)), ylim = c(0.004, max(mod_dist_inc_diaBP$dev.ratio)))
 text(df$log_lambda, 0.004, labels = df$Variables, srt = 90, adj = 0)
 
 # save this plot
-pdf(file = "LogLambdaPlot_distanceIncomeDiaBP.pdf", height = 7, width = 11)
-plot(mod_dist_dep_diaBP$log_lambda, mod_dist_dep_diaBP$dev.ratio, type = "l",
+pdf(file = "LogLambdaPlot_distanceIncomeDiaBP.pdf", height = 6, width = 10)
+plot(mod_dist_inc_diaBP$log_lambda, mod_dist_inc_diaBP$dev.ratio, type = "l",
      xlab = "Log lambda value", ylab = "Deviance ratio", 
-     xlim = rev(range(mod_dist_dep_diaBP$log_lambda)), ylim = c(0.004, max(mod_dist_dep_diaBP$dev.ratio)))
+     xlim = rev(range(mod_dist_inc_diaBP$log_lambda)), ylim = c(0.004, max(mod_dist_inc_diaBP$dev.ratio)))
 text(df$log_lambda, 0.004, labels = df$Variables, srt = 90, adj = 0)
 dev.off()
 
@@ -3955,39 +3530,45 @@ data_ndvi <- data
 
 # Critical period at first time point only
 data_ndvi$crit1 <- data_ndvi$NDVI500_preg
+data_ndvi$crit1 <- data_ndvi$crit1 - mean(data_ndvi$crit1, na.rm = TRUE)
 
 # Interaction between SEP and first time point
-data_ndvi$int1 <- data_ndvi$edu * data_ndvi$NDVI500_preg
+data_ndvi$int1 <- data_ndvi$edu * data_ndvi$crit1
 
 # Critical period at second time point only
 data_ndvi$crit2 <- data_ndvi$NDVI500_4
+data_ndvi$crit2 <- data_ndvi$crit2 - mean(data_ndvi$crit2, na.rm = TRUE)
 
 # Interaction between SEP and second time point
-data_ndvi$int2 <- data_ndvi$edu * data_ndvi$NDVI500_4
+data_ndvi$int2 <- data_ndvi$edu * data_ndvi$crit2
 
 # Critical period at third time point only
 data_ndvi$crit3 <- data_ndvi$NDVI500_7
+data_ndvi$crit3 <- data_ndvi$crit3 - mean(data_ndvi$crit3, na.rm = TRUE)
 
 # Interaction between SEP and third time point
-data_ndvi$int3 <- data_ndvi$edu * data_ndvi$NDVI500_7
+data_ndvi$int3 <- data_ndvi$edu * data_ndvi$crit3
 
 # Linear accumulation of all exposures
 data_ndvi$accumulation <- (data_ndvi$NDVI500_preg + data_ndvi$NDVI500_4 + data_ndvi$NDVI500_7) / 3
+data_ndvi$accumulation <- data_ndvi$accumulation - mean(data_ndvi$accumulation, na.rm = TRUE)
 
 # Interaction between SEP and cumulative exposure
 data_ndvi$int_accum <- data_ndvi$edu * data_ndvi$accumulation
 
 # Change in NDVI between time 1 to time 2
 data_ndvi$green_ch12 <- data_ndvi$NDVI500_4 - data_ndvi$NDVI500_preg
+data_ndvi$green_ch12 <- data_ndvi$green_ch12 - mean(data_ndvi$green_ch12, na.rm = TRUE)
 
 # Change in NDVI between time 1 to time 2, with an interaction with SEP
-data_ndvi$green_ch12_int <- (data_ndvi$NDVI500_4 - data_ndvi$NDVI500_preg) * data_ndvi$edu
+data_ndvi$green_ch12_int <- data_ndvi$green_ch12 * data_ndvi$edu
 
 # Change in NDVI between time 2 to time 3
 data_ndvi$green_ch23 <- data_ndvi$NDVI500_7 - data_ndvi$NDVI500_4
+data_ndvi$green_ch23 <- data_ndvi$green_ch23 - mean(data_ndvi$green_ch23, na.rm = TRUE)
 
 # Change in NDVI between time 2 to time 3, with an interaction with SEP
-data_ndvi$green_ch23_int <- (data_ndvi$NDVI500_7 - data_ndvi$NDVI500_4) * data_ndvi$edu
+data_ndvi$green_ch23_int <- data_ndvi$green_ch23 * data_ndvi$edu
 
 
 ## Make a dataset just with the outcomes, exposure hypotheses and covariates
@@ -4006,6 +3587,7 @@ data_ndvi_edu_bmi <- data_ndvi_edu %>%
   filter(complete.cases(BMI_f7, age_f7, male, white, edu, crit1, int1))
 
 summary(data_ndvi_edu_bmi)
+nrow(data_ndvi_edu_bmi)
 
 # Save the life-course hypotheses and covariates as a matrix
 x_hypos <- data_ndvi_edu_bmi %>%
@@ -4040,28 +3622,12 @@ mod_ndvi_edu_bmi
 # Plot these results
 plot(mod_ndvi_edu_bmi)
 
-# Look at the variables included at each step
-coef(mod_ndvi_edu_bmi, s = max(mod_ndvi_edu_bmi$lambda[mod_ndvi_edu_bmi$df == 4])); min(mod_ndvi_edu_bmi$dev.ratio[mod_ndvi_edu_bmi$df == 4])
-
-coef(mod_ndvi_edu_bmi, s = max(mod_ndvi_edu_bmi$lambda[mod_ndvi_edu_bmi$df == 5])); min(mod_ndvi_edu_bmi$dev.ratio[mod_ndvi_edu_bmi$df == 5])
-
-coef(mod_ndvi_edu_bmi, s = max(mod_ndvi_edu_bmi$lambda[mod_ndvi_edu_bmi$df == 6])); min(mod_ndvi_edu_bmi$dev.ratio[mod_ndvi_edu_bmi$df == 6])
-
-coef(mod_ndvi_edu_bmi, s = max(mod_ndvi_edu_bmi$lambda[mod_ndvi_edu_bmi$df == 7])); min(mod_ndvi_edu_bmi$dev.ratio[mod_ndvi_edu_bmi$df == 7])
-
 
 ### Visual inspection of results (although just looking at the deviance ratios there doesn't seem to be much of an effect of access to green space at all)
 
 # First, use the 'lasso-table' function defined above to pick out the changes in variables and the increment in deviance ratio
 df <- lasso_table(mod_ndvi_edu_bmi)
 df
-
-
-# Make a plot of deviance ratio by lambda value, to show the time variables were entered and the improvement in model fit. This makes it clearer when different variables were added (not the neatest plot, though, as variables bunch up and overlap as lambda approaches 0...). Also, need to be careful about scale of y-axis, as improvement in model fit may not that large.
-plot(mod_ndvi_edu_bmi$lambda, mod_ndvi_edu_bmi$dev.ratio, type = "l",
-     xlab = "Lambda value", ylab = "Deviance ratio", 
-     xlim = rev(range(mod_ndvi_edu_bmi$lambda)), ylim = c(0, max(mod_ndvi_edu_bmi$dev.ratio)))
-text(df$Lambda, 0, labels = df$Variables, srt = 90, adj = 0)
 
 ## Put lambda on the log scale, else differences between early models inflated, as lambda decreases on log scale. This does make the plot slightly more readable, and groups early-included variables closer together
 mod_ndvi_edu_bmi$log_lambda <- log(mod_ndvi_edu_bmi$lambda)
@@ -4070,15 +3636,14 @@ mod_ndvi_edu_bmi
 df$log_lambda <- log(as.numeric(df$Lambda))
 df
 
-
-# This looks better, although same issues as above re. interpreting the first variable added (doesn't mean is a strong predictor of outcome).
+# Make a plot
 plot(mod_ndvi_edu_bmi$log_lambda, mod_ndvi_edu_bmi$dev.ratio, type = "l",
      xlab = "Log lambda value", ylab = "Deviance ratio", 
      xlim = rev(range(mod_ndvi_edu_bmi$log_lambda)), ylim = c(0.007, max(mod_ndvi_edu_bmi$dev.ratio)))
 text(df$log_lambda, 0.007, labels = df$Variables, srt = 90, adj = 0)
 
 # save this plot
-pdf(file = "LogLambdaPlot_NDVIEduBMI.pdf", height = 7, width = 11)
+pdf(file = "LogLambdaPlot_NDVIEduBMI.pdf", height = 6, width = 10)
 plot(mod_ndvi_edu_bmi$log_lambda, mod_ndvi_edu_bmi$dev.ratio, type = "l",
      xlab = "Log lambda value", ylab = "Deviance ratio", 
      xlim = rev(range(mod_ndvi_edu_bmi$log_lambda)), ylim = c(0.007, max(mod_ndvi_edu_bmi$dev.ratio)))
@@ -4086,13 +3651,13 @@ text(df$log_lambda, 0.007, labels = df$Variables, srt = 90, adj = 0)
 dev.off()
 
 
-## From these results, would seem to be that nothing is really going on here - Will do a likelihood ratio test to see whether inclusion of first parameter(s) added (green_ch23_int) increases model fit of standard linear regression model
+## From these results, would seem to be that nothing is really going on here - Will do a likelihood ratio test to see whether inclusion of first parameter(s) added (int2) increases model fit of standard linear regression model
 base_mod <- lm(data_ndvi_edu_bmi$BMI_f7 ~ x_hypos[, "age_f7"] + x_hypos[, "male"] + x_hypos[, "white"] + 
                  x_hypos[, "edu"])
 summary(base_mod)
 
 param1_mod <- lm(data_ndvi_edu_bmi$BMI_f7 ~ x_hypos[, "age_f7"] + x_hypos[, "male"] + x_hypos[, "white"] + 
-                   x_hypos[, "edu"] + x_hypos[, "green_ch23_int"])
+                   x_hypos[, "edu"] + x_hypos[, "int2"])
 summary(param1_mod)
 
 # Nope, is pretty much no association here, suggesting no association between NDVI in childhood and BMI at age 7.
@@ -4124,6 +3689,7 @@ data_ndvi_edu_overweight <- data_ndvi_edu %>%
   filter(complete.cases(overweight, age_f7, male, white, edu, crit1, int1))
 
 summary(data_ndvi_edu_overweight)
+nrow(data_ndvi_edu_overweight)
 
 # Save the life-course hypotheses and covariates as a matrix
 x_hypos <- data_ndvi_edu_overweight %>%
@@ -4146,29 +3712,12 @@ mod_ndvi_edu_over
 # Plot these results
 plot(mod_ndvi_edu_over)
 
-# Look at the variables included at each step
-coef(mod_ndvi_edu_over, s = max(mod_ndvi_edu_over$lambda[mod_ndvi_edu_over$df == 4])); min(mod_ndvi_edu_over$dev.ratio[mod_ndvi_edu_over$df == 4])
-
-coef(mod_ndvi_edu_over, s = max(mod_ndvi_edu_over$lambda[mod_ndvi_edu_over$df == 5])); min(mod_ndvi_edu_over$dev.ratio[mod_ndvi_edu_over$df == 5])
-
-coef(mod_ndvi_edu_over, s = max(mod_ndvi_edu_over$lambda[mod_ndvi_edu_over$df == 6])); min(mod_ndvi_edu_over$dev.ratio[mod_ndvi_edu_over$df == 6])
-
-coef(mod_ndvi_edu_over, s = max(mod_ndvi_edu_over$lambda[mod_ndvi_edu_over$df == 7])); min(mod_ndvi_edu_over$dev.ratio[mod_ndvi_edu_over$df == 7])
-
 
 ### Visual inspection of results (although just looking at the deviance ratios there doesn't seem to be much of an effect of access to green space at all)
 
 # First, use the 'lasso-table' function defined above to pick out the changes in variables and the increment in deviance ratio
 df <- lasso_table(mod_ndvi_edu_over)
 df
-
-
-# Make a plot of deviance ratio by lambda value, to show the time variables were entered and the improvement in model fit. Need to be careful about scale of y-axis, as improvement in model fit may not that large.
-plot(mod_ndvi_edu_over$lambda, mod_ndvi_edu_over$dev.ratio, type = "l",
-     xlab = "Lambda value", ylab = "Deviance ratio", 
-     xlim = rev(range(mod_ndvi_edu_over$lambda)), ylim = c(0, max(mod_ndvi_edu_over$dev.ratio)))
-text(df$Lambda, 0, labels = df$Variables, srt = 90, adj = 0)
-
 
 ## Put lambda on the log scale, else differences between early models inflated, as lambda decreases on log scale. This does make the plot slightly more readable, and groups early-included variables closer together
 mod_ndvi_edu_over$log_lambda <- log(mod_ndvi_edu_over$lambda)
@@ -4177,14 +3726,14 @@ mod_ndvi_edu_over
 df$log_lambda <- log(as.numeric(df$Lambda))
 df
 
-# This looks better, although same issues as above re. interpreting the first variable added (doesn't mean is a strong predictor of outcome).
+# Make the plot
 plot(mod_ndvi_edu_over$log_lambda, mod_ndvi_edu_over$dev.ratio, type = "l",
      xlab = "Log lambda value", ylab = "Deviance ratio", 
      xlim = rev(range(mod_ndvi_edu_over$log_lambda)), ylim = c(0.001, max(mod_ndvi_edu_over$dev.ratio)))
 text(df$log_lambda, 0.001, labels = df$Variables, srt = 90, adj = 0)
 
 # save this plot
-pdf(file = "LogLambdaPlot_NDVIEduOverweight.pdf", height = 7, width = 11)
+pdf(file = "LogLambdaPlot_NDVIEduOverweight.pdf", height = 6, width = 10)
 plot(mod_ndvi_edu_over$log_lambda, mod_ndvi_edu_over$dev.ratio, type = "l",
      xlab = "Log lambda value", ylab = "Deviance ratio", 
      xlim = rev(range(mod_ndvi_edu_over$log_lambda)), ylim = c(0.001, max(mod_ndvi_edu_over$dev.ratio)))
@@ -4230,6 +3779,7 @@ data_ndvi_edu_sysBP <- data_ndvi_edu %>%
   filter(complete.cases(sysBP, age_f7, male, white, edu, crit1, int1))
 
 summary(data_ndvi_edu_sysBP)
+nrow(data_ndvi_edu_sysBP)
 
 # Save the life-course hypotheses and covariates as a matrix
 x_hypos <- data_ndvi_edu_sysBP %>%
@@ -4252,29 +3802,12 @@ mod_ndvi_edu_sysBP
 # Plot these results
 plot(mod_ndvi_edu_sysBP)
 
-# Look at the variables included at each step
-coef(mod_ndvi_edu_sysBP, s = max(mod_ndvi_edu_sysBP$lambda[mod_ndvi_edu_sysBP$df == 4])); min(mod_ndvi_edu_sysBP$dev.ratio[mod_ndvi_edu_sysBP$df == 4])
-
-coef(mod_ndvi_edu_sysBP, s = max(mod_ndvi_edu_sysBP$lambda[mod_ndvi_edu_sysBP$df == 5])); min(mod_ndvi_edu_sysBP$dev.ratio[mod_ndvi_edu_sysBP$df == 5])
-
-coef(mod_ndvi_edu_sysBP, s = max(mod_ndvi_edu_sysBP$lambda[mod_ndvi_edu_sysBP$df == 6])); min(mod_ndvi_edu_sysBP$dev.ratio[mod_ndvi_edu_sysBP$df == 6])
-
-coef(mod_ndvi_edu_sysBP, s = max(mod_ndvi_edu_sysBP$lambda[mod_ndvi_edu_sysBP$df == 8])); min(mod_ndvi_edu_sysBP$dev.ratio[mod_ndvi_edu_sysBP$df == 8])
-
 
 ### Visual inspection of results (although just looking at the deviance ratios there doesn't seem to be much of an effect of access to green space at all)
 
 # First, use the 'lasso-table' function defined above to pick out the changes in variables and the increment in deviance ratio
 df <- lasso_table(mod_ndvi_edu_sysBP)
 df
-
-
-# Make a plot of deviance ratio by lambda value, to show the time variables were entered and the improvement in model fit. Need to be careful about scale of y-axis, as improvement in model fit may not that large.
-plot(mod_ndvi_edu_sysBP$lambda, mod_ndvi_edu_sysBP$dev.ratio, type = "l",
-     xlab = "Lambda value", ylab = "Deviance ratio", 
-     xlim = rev(range(mod_ndvi_edu_sysBP$lambda)), ylim = c(0, max(mod_ndvi_edu_sysBP$dev.ratio)))
-text(df$Lambda, 0, labels = df$Variables, srt = 90, adj = 0)
-
 
 ## Put lambda on the log scale, else differences between early models inflated, as lambda decreases on log scale. This does make the plot slightly more readable, and groups early-included variables closer together
 mod_ndvi_edu_sysBP$log_lambda <- log(mod_ndvi_edu_sysBP$lambda)
@@ -4283,14 +3816,14 @@ mod_ndvi_edu_sysBP
 df$log_lambda <- log(as.numeric(df$Lambda))
 df
 
-# This looks better, although same issues as above re. interpreting the first variable added (doesn't mean is a strong predictor of outcome).
+# Make the plot
 plot(mod_ndvi_edu_sysBP$log_lambda, mod_ndvi_edu_sysBP$dev.ratio, type = "l",
      xlab = "Log lambda value", ylab = "Deviance ratio", 
      xlim = rev(range(mod_ndvi_edu_sysBP$log_lambda)), ylim = c(0.008, max(mod_ndvi_edu_sysBP$dev.ratio)))
 text(df$log_lambda, 0.008, labels = df$Variables, srt = 90, adj = 0)
 
 # save this plot
-pdf(file = "LogLambdaPlot_NDVIEduSysBP.pdf", height = 7, width = 11)
+pdf(file = "LogLambdaPlot_NDVIEduSysBP.pdf", height = 6, width = 10)
 plot(mod_ndvi_edu_sysBP$log_lambda, mod_ndvi_edu_sysBP$dev.ratio, type = "l",
      xlab = "Log lambda value", ylab = "Deviance ratio", 
      xlim = rev(range(mod_ndvi_edu_sysBP$log_lambda)), ylim = c(0.008, max(mod_ndvi_edu_sysBP$dev.ratio)))
@@ -4336,6 +3869,7 @@ data_ndvi_edu_diaBP <- data_ndvi_edu %>%
   filter(complete.cases(diaBP, age_f7, male, white, edu, crit1, int1))
 
 summary(data_ndvi_edu_diaBP)
+nrow(data_ndvi_edu_diaBP)
 
 # Save the life-course hypotheses and covariates as a matrix
 x_hypos <- data_ndvi_edu_diaBP %>%
@@ -4358,29 +3892,12 @@ mod_ndvi_edu_diaBP
 # Plot these results
 plot(mod_ndvi_edu_diaBP)
 
-# Look at the variables included at each step
-coef(mod_ndvi_edu_diaBP, s = max(mod_ndvi_edu_diaBP$lambda[mod_ndvi_edu_diaBP$df == 4])); min(mod_ndvi_edu_diaBP$dev.ratio[mod_ndvi_edu_diaBP$df == 4])
-
-coef(mod_ndvi_edu_diaBP, s = max(mod_ndvi_edu_diaBP$lambda[mod_ndvi_edu_diaBP$df == 5])); min(mod_ndvi_edu_diaBP$dev.ratio[mod_ndvi_edu_diaBP$df == 5])
-
-coef(mod_ndvi_edu_diaBP, s = max(mod_ndvi_edu_diaBP$lambda[mod_ndvi_edu_diaBP$df == 7])); min(mod_ndvi_edu_diaBP$dev.ratio[mod_ndvi_edu_diaBP$df == 7])
-
-coef(mod_ndvi_edu_diaBP, s = max(mod_ndvi_edu_diaBP$lambda[mod_ndvi_edu_diaBP$df == 8])); min(mod_ndvi_edu_diaBP$dev.ratio[mod_ndvi_edu_diaBP$df == 8])
-
 
 ### Visual inspection of results (although just looking at the deviance ratios there doesn't seem to be much of an effect of access to green space at all)
 
 # First, use the 'lasso-table' function defined above to pick out the changes in variables and the increment in deviance ratio
 df <- lasso_table(mod_ndvi_edu_diaBP)
 df
-
-
-# Make a plot of deviance ratio by lambda value, to show the time variables were entered and the improvement in model fit. Need to be careful about scale of y-axis, as improvement in model fit may not that large.
-plot(mod_ndvi_edu_diaBP$lambda, mod_ndvi_edu_diaBP$dev.ratio, type = "l",
-     xlab = "Lambda value", ylab = "Deviance ratio", 
-     xlim = rev(range(mod_ndvi_edu_diaBP$lambda)), ylim = c(0, max(mod_ndvi_edu_diaBP$dev.ratio)))
-text(df$Lambda, 0, labels = df$Variables, srt = 90, adj = 0)
-
 
 ## Put lambda on the log scale, else differences between early models inflated, as lambda decreases on log scale. This does make the plot slightly more readable, and groups early-included variables closer together
 mod_ndvi_edu_diaBP$log_lambda <- log(mod_ndvi_edu_diaBP$lambda)
@@ -4389,14 +3906,14 @@ mod_ndvi_edu_diaBP
 df$log_lambda <- log(as.numeric(df$Lambda))
 df
 
-# This looks better, although same issues as above re. interpreting the first variable added (doesn't mean is a strong predictor of outcome). No obvious strong effects
+# Make the plot
 plot(mod_ndvi_edu_diaBP$log_lambda, mod_ndvi_edu_diaBP$dev.ratio, type = "l",
      xlab = "Log lambda value", ylab = "Deviance ratio", 
      xlim = rev(range(mod_ndvi_edu_diaBP$log_lambda)), ylim = c(0.004, max(mod_ndvi_edu_diaBP$dev.ratio)))
 text(df$log_lambda, 0.004, labels = df$Variables, srt = 90, adj = 0)
 
 # save this plot
-pdf(file = "LogLambdaPlot_NDVIEduDiaBP.pdf", height = 7, width = 11)
+pdf(file = "LogLambdaPlot_NDVIEduDiaBP.pdf", height = 6, width = 10)
 plot(mod_ndvi_edu_diaBP$log_lambda, mod_ndvi_edu_diaBP$dev.ratio, type = "l",
      xlab = "Log lambda value", ylab = "Deviance ratio", 
      xlim = rev(range(mod_ndvi_edu_diaBP$log_lambda)), ylim = c(0.004, max(mod_ndvi_edu_diaBP$dev.ratio)))
@@ -4404,17 +3921,27 @@ text(df$log_lambda, 0.004, labels = df$Variables, srt = 90, adj = 0)
 dev.off()
 
 
-## From these results, would seem to be that nothing is really going on here - Will do a likelihood ratio test to see whether inclusion of first parameter(s) added (crit3) increases model fit of standard linear regression model
+## From these results, would seem to be that nothing is really going on here - Will do a likelihood ratio test to see whether inclusion of first parameter(s) added (int1) increases model fit of standard linear regression model
 base_mod <- lm(data_ndvi_edu_diaBP$diaBP ~ x_hypos[, "age_f7"] + x_hypos[, "male"] + x_hypos[, "white"] + 
                  x_hypos[, "edu"])
 summary(base_mod)
 
 param1_mod <- lm(data_ndvi_edu_diaBP$diaBP ~ x_hypos[, "age_f7"] + x_hypos[, "male"] + 
-                   x_hypos[, "white"] + x_hypos[, "edu"] + x_hypos[, "crit3"])
+                   x_hypos[, "white"] + x_hypos[, "edu"] + x_hypos[, "int1"])
 summary(param1_mod)
 
-# No association here
+# Is an association, with greater NDVI in pregnancy for higher education associated with lower diastolic BP. However, as effect sizes are small and inconsitent with other results, this may be due to random variation.
 anova(base_mod, param1_mod)
+
+coef(summary(param1_mod))
+confint(param1_mod)
+
+# Does inclusion of next parmeter (green_ch23) improve model fit? No
+param2_mod <- lm(data_ndvi_edu_diaBP$diaBP ~ x_hypos[, "age_f7"] + x_hypos[, "male"] + 
+                   x_hypos[, "white"] + x_hypos[, "edu"] + x_hypos[, "int1"] + x_hypos[, "green_ch23"])
+summary(param2_mod)
+
+anova(param1_mod, param2_mod)
 
 
 ## Alternative method using cross-validated lasso to find find 'optimal' model for out-of-sample prediction.
@@ -4425,7 +3952,7 @@ mod.cv
 # Plot the log lambda by MSE to show both 'optimal' and '1SE' models (number of parameters is at top of plot)
 plot(mod.cv) 
 
-# Parameters in the 1SE and 'optimal' models - Both just contains just the 4 parameters included by default (age, sex, ethnicity and education), suggesting no association with access to green space exposure
+# Parameters in the 1SE and 'optimal' models - The 1SE model just contains the 4 parameters included by default (age, sex, ethnicity and education), suggesting no association with access to green space exposure; the minimum MSR model also contains 'int1', but the difference in MSE between these two models is minimal.
 coef(mod.cv, s = mod.cv$lambda.1se)
 coef(mod.cv, s = mod.cv$lambda.min)
 
@@ -4451,39 +3978,45 @@ data_ndvi <- data
 
 # Critical period at first time point only
 data_ndvi$crit1 <- data_ndvi$NDVI500_preg
+data_ndvi$crit1 <- data_ndvi$crit1 - mean(data_ndvi$crit1, na.rm = TRUE)
 
 # Interaction between SEP and first time point
-data_ndvi$int1 <- data_ndvi$deprived * data_ndvi$NDVI500_preg
+data_ndvi$int1 <- data_ndvi$deprived * data_ndvi$crit1
 
 # Critical period at second time point only
 data_ndvi$crit2 <- data_ndvi$NDVI500_4
+data_ndvi$crit2 <- data_ndvi$crit2 - mean(data_ndvi$crit2, na.rm = TRUE)
 
 # Interaction between SEP and second time point
-data_ndvi$int2 <- data_ndvi$deprived * data_ndvi$NDVI500_4
+data_ndvi$int2 <- data_ndvi$deprived * data_ndvi$crit2
 
 # Critical period at third time point only
 data_ndvi$crit3 <- data_ndvi$NDVI500_7
+data_ndvi$crit3 <- data_ndvi$crit3 - mean(data_ndvi$crit3, na.rm = TRUE)
 
 # Interaction between SEP and third time point
-data_ndvi$int3 <- data_ndvi$deprived * data_ndvi$NDVI500_7
+data_ndvi$int3 <- data_ndvi$deprived * data_ndvi$crit3
 
 # Linear accumulation of all exposures
 data_ndvi$accumulation <- (data_ndvi$NDVI500_preg + data_ndvi$NDVI500_4 + data_ndvi$NDVI500_7) / 3
+data_ndvi$accumulation <- data_ndvi$accumulation - mean(data_ndvi$accumulation, na.rm = TRUE)
 
 # Interaction between SEP and cumulative exposure
 data_ndvi$int_accum <- data_ndvi$deprived * data_ndvi$accumulation
 
 # Change in NDVI between time 1 to time 2
 data_ndvi$green_ch12 <- data_ndvi$NDVI500_4 - data_ndvi$NDVI500_preg
+data_ndvi$green_ch12 <- data_ndvi$green_ch12 - mean(data_ndvi$green_ch12, na.rm = TRUE)
 
 # Change in NDVI between time 1 to time 2, with an interaction with SEP
-data_ndvi$green_ch12_int <- (data_ndvi$NDVI500_4 - data_ndvi$NDVI500_preg) * data_ndvi$deprived
+data_ndvi$green_ch12_int <- data_ndvi$green_ch12 * data_ndvi$deprived
 
 # Change in NDVI between time 2 to time 3
 data_ndvi$green_ch23 <- data_ndvi$NDVI500_7 - data_ndvi$NDVI500_4
+data_ndvi$green_ch23 <- data_ndvi$green_ch23 - mean(data_ndvi$green_ch23, na.rm = TRUE)
 
 # Change in NDVI between time 2 to time 3, with an interaction with SEP
-data_ndvi$green_ch23_int <- (data_ndvi$NDVI500_7 - data_ndvi$NDVI500_4) * data_ndvi$deprived
+data_ndvi$green_ch23_int <- data_ndvi$green_ch23 * data_ndvi$deprived
 
 
 ## Make a dataset just with the outcomes, exposure hypotheses and covariates
@@ -4502,6 +4035,7 @@ data_ndvi_dep_bmi <- data_ndvi_dep %>%
   filter(complete.cases(BMI_f7, age_f7, male, white, deprived, crit1, int1))
 
 summary(data_ndvi_dep_bmi)
+nrow(data_ndvi_dep_bmi)
 
 # Save the life-course hypotheses and covariates as a matrix
 x_hypos <- data_ndvi_dep_bmi %>%
@@ -4536,28 +4070,12 @@ mod_ndvi_dep_bmi
 # Plot these results
 plot(mod_ndvi_dep_bmi)
 
-# Look at the variables included at each step
-coef(mod_ndvi_dep_bmi, s = max(mod_ndvi_dep_bmi$lambda[mod_ndvi_dep_bmi$df == 4])); min(mod_ndvi_dep_bmi$dev.ratio[mod_ndvi_dep_bmi$df == 4])
-
-coef(mod_ndvi_dep_bmi, s = max(mod_ndvi_dep_bmi$lambda[mod_ndvi_dep_bmi$df == 5])); min(mod_ndvi_dep_bmi$dev.ratio[mod_ndvi_dep_bmi$df == 5])
-
-coef(mod_ndvi_dep_bmi, s = max(mod_ndvi_dep_bmi$lambda[mod_ndvi_dep_bmi$df == 6])); min(mod_ndvi_dep_bmi$dev.ratio[mod_ndvi_dep_bmi$df == 6])
-
-coef(mod_ndvi_dep_bmi, s = max(mod_ndvi_dep_bmi$lambda[mod_ndvi_dep_bmi$df == 7])); min(mod_ndvi_dep_bmi$dev.ratio[mod_ndvi_dep_bmi$df == 7])
-
 
 ### Visual inspection of results (although just looking at the deviance ratios there doesn't seem to be much of an effect of access to green space at all)
 
 # First, use the 'lasso-table' function defined above to pick out the changes in variables and the increment in deviance ratio
 df <- lasso_table(mod_ndvi_dep_bmi)
 df
-
-
-# Make a plot of deviance ratio by lambda value, to show the time variables were entered and the improvement in model fit. This makes it clearer when different variables were added (not the neatest plot, though, as variables bunch up and overlap as lambda approaches 0...). Also, need to be careful about scale of y-axis, as improvement in model fit may not that large.
-plot(mod_ndvi_dep_bmi$lambda, mod_ndvi_dep_bmi$dev.ratio, type = "l",
-     xlab = "Lambda value", ylab = "Deviance ratio", 
-     xlim = rev(range(mod_ndvi_dep_bmi$lambda)), ylim = c(0, max(mod_ndvi_dep_bmi$dev.ratio)))
-text(df$Lambda, 0, labels = df$Variables, srt = 90, adj = 0)
 
 ## Put lambda on the log scale, else differences between early models inflated, as lambda decreases on log scale. This does make the plot slightly more readable, and groups early-included variables closer together
 mod_ndvi_dep_bmi$log_lambda <- log(mod_ndvi_dep_bmi$lambda)
@@ -4566,15 +4084,14 @@ mod_ndvi_dep_bmi
 df$log_lambda <- log(as.numeric(df$Lambda))
 df
 
-
-# This looks better, although same issues as above re. interpreting the first variable added (doesn't mean is a strong predictor of outcome).
+# Make the plot
 plot(mod_ndvi_dep_bmi$log_lambda, mod_ndvi_dep_bmi$dev.ratio, type = "l",
      xlab = "Log lambda value", ylab = "Deviance ratio", 
      xlim = rev(range(mod_ndvi_dep_bmi$log_lambda)), ylim = c(0.008, max(mod_ndvi_dep_bmi$dev.ratio)))
 text(df$log_lambda, 0.008, labels = df$Variables, srt = 90, adj = 0)
 
 # save this plot
-pdf(file = "LogLambdaPlot_NDVIDepBMI.pdf", height = 7, width = 11)
+pdf(file = "LogLambdaPlot_NDVIDepBMI.pdf", height = 6, width = 10)
 plot(mod_ndvi_dep_bmi$log_lambda, mod_ndvi_dep_bmi$dev.ratio, type = "l",
      xlab = "Log lambda value", ylab = "Deviance ratio", 
      xlim = rev(range(mod_ndvi_dep_bmi$log_lambda)), ylim = c(0.008, max(mod_ndvi_dep_bmi$dev.ratio)))
@@ -4603,7 +4120,7 @@ mod.cv
 # Plot the log lambda by MSE to show both 'optimal' and '1SE' models (number of parameters is at the top of the plot)
 plot(mod.cv) 
 
-# Parameters in the 1SE and 'optimal' models - The 1SE model just contains just the 4 parameters included by default (age, sex, ethnicity and education), suggesting no association with NDVI exposure; while the minimal MSE model also contains crit1, the improvement in MSE relative to the null model is practically nil.
+# Parameters in the 1SE and 'optimal' models - The 1SE model just contains just the 4 parameters included by default (age, sex, ethnicity and education), suggesting no association with NDVI exposure
 coef(mod.cv, s = mod.cv$lambda.1se)
 coef(mod.cv, s = mod.cv$lambda.min)
 
@@ -4620,6 +4137,7 @@ data_ndvi_dep_overweight <- data_ndvi_dep %>%
   filter(complete.cases(overweight, age_f7, male, white, deprived, crit1, int1))
 
 summary(data_ndvi_dep_overweight)
+nrow(data_ndvi_dep_overweight)
 
 # Save the life-course hypotheses and covariates as a matrix
 x_hypos <- data_ndvi_dep_overweight %>%
@@ -4642,29 +4160,12 @@ mod_ndvi_dep_over
 # Plot these results
 plot(mod_ndvi_dep_over)
 
-# Look at the variables included at each step
-coef(mod_ndvi_dep_over, s = max(mod_ndvi_dep_over$lambda[mod_ndvi_dep_over$df == 4])); min(mod_ndvi_dep_over$dev.ratio[mod_ndvi_dep_over$df == 4])
-
-coef(mod_ndvi_dep_over, s = max(mod_ndvi_dep_over$lambda[mod_ndvi_dep_over$df == 5])); min(mod_ndvi_dep_over$dev.ratio[mod_ndvi_dep_over$df == 5])
-
-coef(mod_ndvi_dep_over, s = max(mod_ndvi_dep_over$lambda[mod_ndvi_dep_over$df == 6])); min(mod_ndvi_dep_over$dev.ratio[mod_ndvi_dep_over$df == 6])
-
-coef(mod_ndvi_dep_over, s = max(mod_ndvi_dep_over$lambda[mod_ndvi_dep_over$df == 7])); min(mod_ndvi_dep_over$dev.ratio[mod_ndvi_dep_over$df == 7])
-
 
 ### Visual inspection of results (although just looking at the deviance ratios there doesn't seem to be much of an effect of access to green space at all)
 
 # First, use the 'lasso-table' function defined above to pick out the changes in variables and the increment in deviance ratio
 df <- lasso_table(mod_ndvi_dep_over)
 df
-
-
-# Make a plot of deviance ratio by lambda value, to show the time variables were entered and the improvement in model fit. Need to be careful about scale of y-axis, as improvement in model fit may not that large.
-plot(mod_ndvi_dep_over$lambda, mod_ndvi_dep_over$dev.ratio, type = "l",
-     xlab = "Lambda value", ylab = "Deviance ratio", 
-     xlim = rev(range(mod_ndvi_dep_over$lambda)), ylim = c(0, max(mod_ndvi_dep_over$dev.ratio)))
-text(df$Lambda, 0, labels = df$Variables, srt = 90, adj = 0)
-
 
 ## Put lambda on the log scale, else differences between early models inflated, as lambda decreases on log scale. This does make the plot slightly more readable, and groups early-included variables closer together
 mod_ndvi_dep_over$log_lambda <- log(mod_ndvi_dep_over$lambda)
@@ -4673,14 +4174,14 @@ mod_ndvi_dep_over
 df$log_lambda <- log(as.numeric(df$Lambda))
 df
 
-# This looks better, although same issues as above re. interpreting the first variable added (doesn't mean is a strong predictor of outcome).
+# Make the plot
 plot(mod_ndvi_dep_over$log_lambda, mod_ndvi_dep_over$dev.ratio, type = "l",
      xlab = "Log lambda value", ylab = "Deviance ratio", 
      xlim = rev(range(mod_ndvi_dep_over$log_lambda)), ylim = c(0.001, max(mod_ndvi_dep_over$dev.ratio)))
 text(df$log_lambda, 0.001, labels = df$Variables, srt = 90, adj = 0)
 
 # save this plot
-pdf(file = "LogLambdaPlot_NDVIDepOverweight.pdf", height = 7, width = 11)
+pdf(file = "LogLambdaPlot_NDVIDepOverweight.pdf", height = 6, width = 10)
 plot(mod_ndvi_dep_over$log_lambda, mod_ndvi_dep_over$dev.ratio, type = "l",
      xlab = "Log lambda value", ylab = "Deviance ratio", 
      xlim = rev(range(mod_ndvi_dep_over$log_lambda)), ylim = c(0.001, max(mod_ndvi_dep_over$dev.ratio)))
@@ -4727,6 +4228,7 @@ data_ndvi_dep_sysBP <- data_ndvi_dep %>%
   filter(complete.cases(sysBP, age_f7, male, white, deprived, crit1, int1))
 
 summary(data_ndvi_dep_sysBP)
+nrow(data_ndvi_dep_sysBP)
 
 # Save the life-course hypotheses and covariates as a matrix
 x_hypos <- data_ndvi_dep_sysBP %>%
@@ -4749,29 +4251,12 @@ mod_ndvi_dep_sysBP
 # Plot these results
 plot(mod_ndvi_dep_sysBP)
 
-# Look at the variables included at each step
-coef(mod_ndvi_dep_sysBP, s = max(mod_ndvi_dep_sysBP$lambda[mod_ndvi_dep_sysBP$df == 4])); min(mod_ndvi_dep_sysBP$dev.ratio[mod_ndvi_dep_sysBP$df == 4])
-
-coef(mod_ndvi_dep_sysBP, s = max(mod_ndvi_dep_sysBP$lambda[mod_ndvi_dep_sysBP$df == 5])); min(mod_ndvi_dep_sysBP$dev.ratio[mod_ndvi_dep_sysBP$df == 5])
-
-coef(mod_ndvi_dep_sysBP, s = max(mod_ndvi_dep_sysBP$lambda[mod_ndvi_dep_sysBP$df == 6])); min(mod_ndvi_dep_sysBP$dev.ratio[mod_ndvi_dep_sysBP$df == 6])
-
-coef(mod_ndvi_dep_sysBP, s = max(mod_ndvi_dep_sysBP$lambda[mod_ndvi_dep_sysBP$df == 7])); min(mod_ndvi_dep_sysBP$dev.ratio[mod_ndvi_dep_sysBP$df == 7])
-
 
 ### Visual inspection of results (although just looking at the deviance ratios there doesn't seem to be much of an effect of access to green space at all)
 
 # First, use the 'lasso-table' function defined above to pick out the changes in variables and the increment in deviance ratio
 df <- lasso_table(mod_ndvi_dep_sysBP)
 df
-
-
-# Make a plot of deviance ratio by lambda value, to show the time variables were entered and the improvement in model fit. Need to be careful about scale of y-axis, as improvement in model fit may not that large.
-plot(mod_ndvi_dep_sysBP$lambda, mod_ndvi_dep_sysBP$dev.ratio, type = "l",
-     xlab = "Lambda value", ylab = "Deviance ratio", 
-     xlim = rev(range(mod_ndvi_dep_sysBP$lambda)), ylim = c(0, max(mod_ndvi_dep_sysBP$dev.ratio)))
-text(df$Lambda, 0, labels = df$Variables, srt = 90, adj = 0)
-
 
 ## Put lambda on the log scale, else differences between early models inflated, as lambda decreases on log scale. This does make the plot slightly more readable, and groups early-included variables closer together
 mod_ndvi_dep_sysBP$log_lambda <- log(mod_ndvi_dep_sysBP$lambda)
@@ -4780,14 +4265,14 @@ mod_ndvi_dep_sysBP
 df$log_lambda <- log(as.numeric(df$Lambda))
 df
 
-# This looks better, although same issues as above re. interpreting the first variable added (doesn't mean is a strong predictor of outcome).
+# Make the plot
 plot(mod_ndvi_dep_sysBP$log_lambda, mod_ndvi_dep_sysBP$dev.ratio, type = "l",
      xlab = "Log lambda value", ylab = "Deviance ratio", 
      xlim = rev(range(mod_ndvi_dep_sysBP$log_lambda)), ylim = c(0.006, max(mod_ndvi_dep_sysBP$dev.ratio)))
 text(df$log_lambda, 0.006, labels = df$Variables, srt = 90, adj = 0)
 
 # save this plot
-pdf(file = "LogLambdaPlot_NDVIDepSysBP.pdf", height = 7, width = 11)
+pdf(file = "LogLambdaPlot_NDVIDepSysBP.pdf", height = 6, width = 10)
 plot(mod_ndvi_dep_sysBP$log_lambda, mod_ndvi_dep_sysBP$dev.ratio, type = "l",
      xlab = "Log lambda value", ylab = "Deviance ratio", 
      xlim = rev(range(mod_ndvi_dep_sysBP$log_lambda)), ylim = c(0.006, max(mod_ndvi_dep_sysBP$dev.ratio)))
@@ -4807,9 +4292,12 @@ summary(param1_mod)
 # Does seem to be a marginal association here, with an increase in NDVI (i.e., more green space) during pregnancy associated with higher systolic BP. However, given that the effect size is tiny and interpretation not clear (why would increasing NDVI be associated with higher BP?), this could just be the model hooking up to random noise.
 anova(base_mod, param1_mod)
 
-# Does adding the next parameter (green_ch23) improve model fit? No.
+coef(summary(param1_mod))
+confint(param1_mod)
+
+# Does adding the next parameter (int1) improve model fit? No.
 param2_mod <- lm(data_ndvi_dep_sysBP$sysBP ~ x_hypos[, "age_f7"] + x_hypos[, "male"] + 
-                   x_hypos[, "white"] + x_hypos[, "deprived"] + x_hypos[, "crit1"] + x_hypos[, "green_ch23"])
+                   x_hypos[, "white"] + x_hypos[, "deprived"] + x_hypos[, "crit1"] + x_hypos[, "int1"])
 summary(param2_mod)
 
 anova(param1_mod, param2_mod)
@@ -4823,7 +4311,7 @@ mod.cv
 # Plot the log lambda by MSE to show both 'optimal' and '1SE' models (number of parameters is at top of plot)
 plot(mod.cv) 
 
-# Parameters in the 1SE and 'optimal' models - The 1SE model is just the null/covariate-only model, while the 'optimal'/lowest MSE model also contains crit1. The difference in MSE is minimal, though, so not especially convincing. Suggests at best a very weak association with access to green space exposure
+# Parameters in the 1SE and 'optimal' models - Both models just contain the null/covariate-only model, suggesting little association with access to green space exposure
 coef(mod.cv, s = mod.cv$lambda.1se)
 coef(mod.cv, s = mod.cv$lambda.min)
 
@@ -4840,6 +4328,7 @@ data_ndvi_dep_diaBP <- data_ndvi_dep %>%
   filter(complete.cases(diaBP, age_f7, male, white, deprived, crit1, int1))
 
 summary(data_ndvi_dep_diaBP)
+nrow(data_ndvi_dep_diaBP)
 
 # Save the life-course hypotheses and covariates as a matrix
 x_hypos <- data_ndvi_dep_diaBP %>%
@@ -4862,29 +4351,12 @@ mod_ndvi_dep_diaBP
 # Plot these results
 plot(mod_ndvi_dep_diaBP)
 
-# Look at the variables included at each step
-coef(mod_ndvi_dep_diaBP, s = max(mod_ndvi_dep_diaBP$lambda[mod_ndvi_dep_diaBP$df == 4])); min(mod_ndvi_dep_diaBP$dev.ratio[mod_ndvi_dep_diaBP$df == 4])
-
-coef(mod_ndvi_dep_diaBP, s = max(mod_ndvi_dep_diaBP$lambda[mod_ndvi_dep_diaBP$df == 5])); min(mod_ndvi_dep_diaBP$dev.ratio[mod_ndvi_dep_diaBP$df == 5])
-
-coef(mod_ndvi_dep_diaBP, s = max(mod_ndvi_dep_diaBP$lambda[mod_ndvi_dep_diaBP$df == 6])); min(mod_ndvi_dep_diaBP$dev.ratio[mod_ndvi_dep_diaBP$df == 6])
-
-coef(mod_ndvi_dep_diaBP, s = max(mod_ndvi_dep_diaBP$lambda[mod_ndvi_dep_diaBP$df == 7])); min(mod_ndvi_dep_diaBP$dev.ratio[mod_ndvi_dep_diaBP$df == 7])
-
 
 ### Visual inspection of results (although just looking at the deviance ratios there doesn't seem to be much of an effect of access to green space at all)
 
 # First, use the 'lasso-table' function defined above to pick out the changes in variables and the increment in deviance ratio
 df <- lasso_table(mod_ndvi_dep_diaBP)
 df
-
-
-# Make a plot of deviance ratio by lambda value, to show the time variables were entered and the improvement in model fit. Need to be careful about scale of y-axis, as improvement in model fit may not that large.
-plot(mod_ndvi_dep_diaBP$lambda, mod_ndvi_dep_diaBP$dev.ratio, type = "l",
-     xlab = "Lambda value", ylab = "Deviance ratio", 
-     xlim = rev(range(mod_ndvi_dep_diaBP$lambda)), ylim = c(0, max(mod_ndvi_dep_diaBP$dev.ratio)))
-text(df$Lambda, 0, labels = df$Variables, srt = 90, adj = 0)
-
 
 ## Put lambda on the log scale, else differences between early models inflated, as lambda decreases on log scale. This does make the plot slightly more readable, and groups early-included variables closer together
 mod_ndvi_dep_diaBP$log_lambda <- log(mod_ndvi_dep_diaBP$lambda)
@@ -4893,14 +4365,14 @@ mod_ndvi_dep_diaBP
 df$log_lambda <- log(as.numeric(df$Lambda))
 df
 
-# This looks better, although same issues as above re. interpreting the first variable added (doesn't mean is a strong predictor of outcome).
+# Make the plot
 plot(mod_ndvi_dep_diaBP$log_lambda, mod_ndvi_dep_diaBP$dev.ratio, type = "l",
      xlab = "Log lambda value", ylab = "Deviance ratio", 
      xlim = rev(range(mod_ndvi_dep_diaBP$log_lambda)), ylim = c(0.006, max(mod_ndvi_dep_diaBP$dev.ratio)))
 text(df$log_lambda, 0.006, labels = df$Variables, srt = 90, adj = 0)
 
 # save this plot
-pdf(file = "LogLambdaPlot_NDVIDepDiaBP.pdf", height = 7, width = 11)
+pdf(file = "LogLambdaPlot_NDVIDepDiaBP.pdf", height = 6, width = 10)
 plot(mod_ndvi_dep_diaBP$log_lambda, mod_ndvi_dep_diaBP$dev.ratio, type = "l",
      xlab = "Log lambda value", ylab = "Deviance ratio", 
      xlim = rev(range(mod_ndvi_dep_diaBP$log_lambda)), ylim = c(0.006, max(mod_ndvi_dep_diaBP$dev.ratio)))
@@ -4908,13 +4380,13 @@ text(df$log_lambda, 0.006, labels = df$Variables, srt = 90, adj = 0)
 dev.off()
 
 
-## From these results, would seem to be that nothing is really going on here - Will do a likelihood ratio test to see whether inclusion of first parameter(s) added (green_ch23) increases model fit of standard linear regression model
+## From these results, would seem to be that nothing is really going on here - Will do a likelihood ratio test to see whether inclusion of first parameter(s) added (int2 and green_ch23) increases model fit of standard linear regression model
 base_mod <- lm(data_ndvi_dep_diaBP$diaBP ~ x_hypos[, "age_f7"] + x_hypos[, "male"] + x_hypos[, "white"] + 
                  x_hypos[, "deprived"])
 summary(base_mod)
 
 param1_mod <- lm(data_ndvi_dep_diaBP$diaBP ~ x_hypos[, "age_f7"] + x_hypos[, "male"] + 
-                   x_hypos[, "white"] + x_hypos[, "deprived"] + x_hypos[, "green_ch23"])
+                   x_hypos[, "white"] + x_hypos[, "deprived"] + x_hypos[, "int2"] + x_hypos[, "green_ch23"])
 summary(param1_mod)
 
 # No association here
@@ -4956,39 +4428,45 @@ data_ndvi <- data
 
 # Critical period at first time point only
 data_ndvi$crit1 <- data_ndvi$NDVI500_preg
+data_ndvi$crit1 <- data_ndvi$crit1 - mean(data_ndvi$crit1, na.rm = TRUE)
 
 # Interaction between SEP and first time point
-data_ndvi$int1 <- data_ndvi$lowIncome * data_ndvi$NDVI500_preg
+data_ndvi$int1 <- data_ndvi$lowIncome * data_ndvi$crit1
 
 # Critical period at second time point only
 data_ndvi$crit2 <- data_ndvi$NDVI500_4
+data_ndvi$crit2 <- data_ndvi$crit2 - mean(data_ndvi$crit2, na.rm = TRUE)
 
 # Interaction between SEP and second time point
-data_ndvi$int2 <- data_ndvi$lowIncome * data_ndvi$NDVI500_4
+data_ndvi$int2 <- data_ndvi$lowIncome * data_ndvi$crit2
 
 # Critical period at third time point only
 data_ndvi$crit3 <- data_ndvi$NDVI500_7
+data_ndvi$crit3 <- data_ndvi$crit3 - mean(data_ndvi$crit3, na.rm = TRUE)
 
 # Interaction between SEP and third time point
-data_ndvi$int3 <- data_ndvi$lowIncome * data_ndvi$NDVI500_7
+data_ndvi$int3 <- data_ndvi$lowIncome * data_ndvi$crit3
 
 # Linear accumulation of all exposures
 data_ndvi$accumulation <- (data_ndvi$NDVI500_preg + data_ndvi$NDVI500_4 + data_ndvi$NDVI500_7) / 3
+data_ndvi$accumulation <- data_ndvi$accumulation - mean(data_ndvi$accumulation, na.rm = TRUE)
 
 # Interaction between SEP and cumulative exposure
 data_ndvi$int_accum <- data_ndvi$lowIncome * data_ndvi$accumulation
 
 # Change in NDVI between time 1 to time 2
 data_ndvi$green_ch12 <- data_ndvi$NDVI500_4 - data_ndvi$NDVI500_preg
+data_ndvi$green_ch12 <- data_ndvi$green_ch12 - mean(data_ndvi$green_ch12, na.rm = TRUE)
 
 # Change in NDVI between time 1 to time 2, with an interaction with SEP
-data_ndvi$green_ch12_int <- (data_ndvi$NDVI500_4 - data_ndvi$NDVI500_preg) * data_ndvi$lowIncome
+data_ndvi$green_ch12_int <- data_ndvi$green_ch12 * data_ndvi$lowIncome
 
 # Change in NDVI between time 2 to time 3
 data_ndvi$green_ch23 <- data_ndvi$NDVI500_7 - data_ndvi$NDVI500_4
+data_ndvi$green_ch23 <- data_ndvi$green_ch23 - mean(data_ndvi$green_ch23, na.rm = TRUE)
 
 # Change in NDVI between time 2 to time 3, with an interaction with SEP
-data_ndvi$green_ch23_int <- (data_ndvi$NDVI500_7 - data_ndvi$NDVI500_4) * data_ndvi$lowIncome
+data_ndvi$green_ch23_int <- data_ndvi$green_ch23 * data_ndvi$lowIncome
 
 
 ## Make a dataset just with the outcomes, exposure hypotheses and covariates
@@ -5007,6 +4485,7 @@ data_ndvi_inc_bmi <- data_ndvi_inc %>%
   filter(complete.cases(BMI_f7, age_f7, male, white, lowIncome, crit1, int1))
 
 summary(data_ndvi_inc_bmi)
+nrow(data_ndvi_inc_bmi)
 
 # Save the life-course hypotheses and covariates as a matrix
 x_hypos <- data_ndvi_inc_bmi %>%
@@ -5041,28 +4520,12 @@ mod_ndvi_inc_bmi
 # Plot these results
 plot(mod_ndvi_inc_bmi)
 
-# Look at the variables included at each step
-coef(mod_ndvi_inc_bmi, s = max(mod_ndvi_inc_bmi$lambda[mod_ndvi_inc_bmi$df == 4])); min(mod_ndvi_inc_bmi$dev.ratio[mod_ndvi_inc_bmi$df == 4])
-
-coef(mod_ndvi_inc_bmi, s = max(mod_ndvi_inc_bmi$lambda[mod_ndvi_inc_bmi$df == 5])); min(mod_ndvi_inc_bmi$dev.ratio[mod_ndvi_inc_bmi$df == 5])
-
-coef(mod_ndvi_inc_bmi, s = max(mod_ndvi_inc_bmi$lambda[mod_ndvi_inc_bmi$df == 6])); min(mod_ndvi_inc_bmi$dev.ratio[mod_ndvi_inc_bmi$df == 6])
-
-coef(mod_ndvi_inc_bmi, s = max(mod_ndvi_inc_bmi$lambda[mod_ndvi_inc_bmi$df == 7])); min(mod_ndvi_inc_bmi$dev.ratio[mod_ndvi_inc_bmi$df == 7])
-
 
 ### Visual inspection of results (although just looking at the deviance ratios there doesn't seem to be much of an effect of access to green space at all)
 
 # First, use the 'lasso-table' function defined above to pick out the changes in variables and the increment in deviance ratio
 df <- lasso_table(mod_ndvi_inc_bmi)
 df
-
-
-# Make a plot of deviance ratio by lambda value, to show the time variables were entered and the improvement in model fit. This makes it clearer when different variables were added (not the neatest plot, though, as variables bunch up and overlap as lambda approaches 0...). Also, need to be careful about scale of y-axis, as improvement in model fit may not that large.
-plot(mod_ndvi_inc_bmi$lambda, mod_ndvi_inc_bmi$dev.ratio, type = "l",
-     xlab = "Lambda value", ylab = "Deviance ratio", 
-     xlim = rev(range(mod_ndvi_inc_bmi$lambda)), ylim = c(0, max(mod_ndvi_inc_bmi$dev.ratio)))
-text(df$Lambda, 0, labels = df$Variables, srt = 90, adj = 0)
 
 ## Put lambda on the log scale, else differences between early models inflated, as lambda decreases on log scale. This does make the plot slightly more readable, and groups early-included variables closer together
 mod_ndvi_inc_bmi$log_lambda <- log(mod_ndvi_inc_bmi$lambda)
@@ -5071,15 +4534,14 @@ mod_ndvi_inc_bmi
 df$log_lambda <- log(as.numeric(df$Lambda))
 df
 
-
-# This looks better, although same issues as above re. interpreting the first variable added (doesn't mean is a strong predictor of outcome).
+# Make the plot
 plot(mod_ndvi_inc_bmi$log_lambda, mod_ndvi_inc_bmi$dev.ratio, type = "l",
      xlab = "Log lambda value", ylab = "Deviance ratio", 
      xlim = rev(range(mod_ndvi_inc_bmi$log_lambda)), ylim = c(0.006, max(mod_ndvi_inc_bmi$dev.ratio)))
 text(df$log_lambda, 0.006, labels = df$Variables, srt = 90, adj = 0)
 
 # save this plot
-pdf(file = "LogLambdaPlot_NDVIIncomeBMI.pdf", height = 7, width = 11)
+pdf(file = "LogLambdaPlot_NDVIIncomeBMI.pdf", height = 6, width = 10)
 plot(mod_ndvi_inc_bmi$log_lambda, mod_ndvi_inc_bmi$dev.ratio, type = "l",
      xlab = "Log lambda value", ylab = "Deviance ratio", 
      xlim = rev(range(mod_ndvi_inc_bmi$log_lambda)), ylim = c(0.006, max(mod_ndvi_inc_bmi$dev.ratio)))
@@ -5087,13 +4549,13 @@ text(df$log_lambda, 0.006, labels = df$Variables, srt = 90, adj = 0)
 dev.off()
 
 
-## From these results, would seem to be that nothing is really going on here - Will do a likelihood ratio test to see whether inclusion of first parameter added (green_ch23) increases model fit of standard linear regression model
+## From these results, would seem to be that nothing is really going on here - Will do a likelihood ratio test to see whether inclusion of first parameter added (int2 and green_ch23) increases model fit of standard linear regression model
 base_mod <- lm(data_ndvi_inc_bmi$BMI_f7 ~ x_hypos[, "age_f7"] + x_hypos[, "male"] + x_hypos[, "white"] + 
                  x_hypos[, "lowIncome"])
 summary(base_mod)
 
 param1_mod <- lm(data_ndvi_inc_bmi$BMI_f7 ~ x_hypos[, "age_f7"] + x_hypos[, "male"] + x_hypos[, "white"] + 
-                   x_hypos[, "lowIncome"] + x_hypos[, "green_ch23"])
+                   x_hypos[, "lowIncome"] + x_hypos[, "int2"] + x_hypos[, "green_ch23"])
 summary(param1_mod)
 
 # Nope, is pretty much no association here, suggesting no association between NDVI in childhood and BMI at age 7.
@@ -5125,6 +4587,7 @@ data_ndvi_inc_overweight <- data_ndvi_inc %>%
   filter(complete.cases(overweight, age_f7, male, white, lowIncome, crit1, int1))
 
 summary(data_ndvi_inc_overweight)
+nrow(data_ndvi_inc_overweight)
 
 # Save the life-course hypotheses and covariates as a matrix
 x_hypos <- data_ndvi_inc_overweight %>%
@@ -5147,29 +4610,12 @@ mod_ndvi_inc_over
 # Plot these results
 plot(mod_ndvi_inc_over)
 
-# Look at the variables included at each step
-coef(mod_ndvi_inc_over, s = max(mod_ndvi_inc_over$lambda[mod_ndvi_inc_over$df == 4])); min(mod_ndvi_inc_over$dev.ratio[mod_ndvi_inc_over$df == 4])
-
-coef(mod_ndvi_inc_over, s = max(mod_ndvi_inc_over$lambda[mod_ndvi_inc_over$df == 6])); min(mod_ndvi_inc_over$dev.ratio[mod_ndvi_inc_over$df == 6])
-
-coef(mod_ndvi_inc_over, s = max(mod_ndvi_inc_over$lambda[mod_ndvi_inc_over$df == 7])); min(mod_ndvi_inc_over$dev.ratio[mod_ndvi_inc_over$df == 7])
-
-coef(mod_ndvi_inc_over, s = max(mod_ndvi_inc_over$lambda[mod_ndvi_inc_over$df == 8])); min(mod_ndvi_inc_over$dev.ratio[mod_ndvi_inc_over$df == 8])
-
 
 ### Visual inspection of results (although just looking at the deviance ratios there doesn't seem to be much of an effect of access to green space at all)
 
 # First, use the 'lasso-table' function defined above to pick out the changes in variables and the increment in deviance ratio
 df <- lasso_table(mod_ndvi_inc_over)
 df
-
-
-# Make a plot of deviance ratio by lambda value, to show the time variables were entered and the improvement in model fit. Need to be careful about scale of y-axis, as improvement in model fit may not that large.
-plot(mod_ndvi_inc_over$lambda, mod_ndvi_inc_over$dev.ratio, type = "l",
-     xlab = "Lambda value", ylab = "Deviance ratio", 
-     xlim = rev(range(mod_ndvi_inc_over$lambda)), ylim = c(0, max(mod_ndvi_inc_over$dev.ratio)))
-text(df$Lambda, 0, labels = df$Variables, srt = 90, adj = 0)
-
 
 ## Put lambda on the log scale, else differences between early models inflated, as lambda decreases on log scale. This does make the plot slightly more readable, and groups early-included variables closer together
 mod_ndvi_inc_over$log_lambda <- log(mod_ndvi_inc_over$lambda)
@@ -5178,7 +4624,7 @@ mod_ndvi_inc_over
 df$log_lambda <- log(as.numeric(df$Lambda))
 df
 
-# This looks better, although same issues as above re. interpreting the first variable added (doesn't mean is a strong predictor of outcome). (Have to add a bit of faff here to get y-axis to not display in scientific notation)
+# Make the plot (Have to add a bit of faff here to get y-axis to not display in scientific notation)
 plot(mod_ndvi_inc_over$log_lambda, mod_ndvi_inc_over$dev.ratio, type = "l",
      xlab = "Log lambda value", ylab = "Deviance ratio", yaxt = "n",
      xlim = rev(range(mod_ndvi_inc_over$log_lambda)), ylim = c(0.000, max(mod_ndvi_inc_over$dev.ratio)))
@@ -5186,7 +4632,7 @@ axis(2, at = c(0, 0.0002, 0.0004, 0.0006, 0.0008), labels = format(c(0, 0.0002, 
 text(df$log_lambda, 0.000, labels = df$Variables, srt = 90, adj = 0)
 
 # save this plot
-pdf(file = "LogLambdaPlot_NDVIIncomeOverweight.pdf", height = 7, width = 11)
+pdf(file = "LogLambdaPlot_NDVIIncomeOverweight.pdf", height = 6, width = 10)
 plot(mod_ndvi_inc_over$log_lambda, mod_ndvi_inc_over$dev.ratio, type = "l",
      xlab = "Log lambda value", ylab = "Deviance ratio", yaxt = "n",
      xlim = rev(range(mod_ndvi_inc_over$log_lambda)), ylim = c(0.000, max(mod_ndvi_inc_over$dev.ratio)))
@@ -5234,6 +4680,7 @@ data_ndvi_inc_sysBP <- data_ndvi_inc %>%
   filter(complete.cases(sysBP, age_f7, male, white, lowIncome, crit1, int1))
 
 summary(data_ndvi_inc_sysBP)
+nrow(data_ndvi_inc_sysBP)
 
 # Save the life-course hypotheses and covariates as a matrix
 x_hypos <- data_ndvi_inc_sysBP %>%
@@ -5256,29 +4703,12 @@ mod_ndvi_inc_sysBP
 # Plot these results
 plot(mod_ndvi_inc_sysBP)
 
-# Look at the variables included at each step
-coef(mod_ndvi_inc_sysBP, s = max(mod_ndvi_inc_sysBP$lambda[mod_ndvi_inc_sysBP$df == 4])); min(mod_ndvi_inc_sysBP$dev.ratio[mod_ndvi_inc_sysBP$df == 4])
-
-coef(mod_ndvi_inc_sysBP, s = max(mod_ndvi_inc_sysBP$lambda[mod_ndvi_inc_sysBP$df == 5])); min(mod_ndvi_inc_sysBP$dev.ratio[mod_ndvi_inc_sysBP$df == 5])
-
-coef(mod_ndvi_inc_sysBP, s = max(mod_ndvi_inc_sysBP$lambda[mod_ndvi_inc_sysBP$df == 6])); min(mod_ndvi_inc_sysBP$dev.ratio[mod_ndvi_inc_sysBP$df == 6])
-
-coef(mod_ndvi_inc_sysBP, s = max(mod_ndvi_inc_sysBP$lambda[mod_ndvi_inc_sysBP$df == 7])); min(mod_ndvi_inc_sysBP$dev.ratio[mod_ndvi_inc_sysBP$df == 7])
-
 
 ### Visual inspection of results (although just looking at the deviance ratios there doesn't seem to be much of an effect of access to green space at all)
 
 # First, use the 'lasso-table' function defined above to pick out the changes in variables and the increment in deviance ratio
 df <- lasso_table(mod_ndvi_inc_sysBP)
 df
-
-
-# Make a plot of deviance ratio by lambda value, to show the time variables were entered and the improvement in model fit. Need to be careful about scale of y-axis, as improvement in model fit may not that large.
-plot(mod_ndvi_inc_sysBP$lambda, mod_ndvi_inc_sysBP$dev.ratio, type = "l",
-     xlab = "Lambda value", ylab = "Deviance ratio", 
-     xlim = rev(range(mod_ndvi_inc_sysBP$lambda)), ylim = c(0, max(mod_ndvi_inc_sysBP$dev.ratio)))
-text(df$Lambda, 0, labels = df$Variables, srt = 90, adj = 0)
-
 
 ## Put lambda on the log scale, else differences between early models inflated, as lambda decreases on log scale. This does make the plot slightly more readable, and groups early-included variables closer together
 mod_ndvi_inc_sysBP$log_lambda <- log(mod_ndvi_inc_sysBP$lambda)
@@ -5287,14 +4717,14 @@ mod_ndvi_inc_sysBP
 df$log_lambda <- log(as.numeric(df$Lambda))
 df
 
-# This looks better, although same issues as above re. interpreting the first variable added (doesn't mean is a strong predictor of outcome).
+# Make the plot
 plot(mod_ndvi_inc_sysBP$log_lambda, mod_ndvi_inc_sysBP$dev.ratio, type = "l",
      xlab = "Log lambda value", ylab = "Deviance ratio", 
      xlim = rev(range(mod_ndvi_inc_sysBP$log_lambda)), ylim = c(0.004, max(mod_ndvi_inc_sysBP$dev.ratio)))
 text(df$log_lambda, 0.004, labels = df$Variables, srt = 90, adj = 0)
 
 # save this plot
-pdf(file = "LogLambdaPlot_NDVIIncSysBP.pdf", height = 7, width = 11)
+pdf(file = "LogLambdaPlot_NDVIIncomeSysBP.pdf", height = 6, width = 10)
 plot(mod_ndvi_inc_sysBP$log_lambda, mod_ndvi_inc_sysBP$dev.ratio, type = "l",
      xlab = "Log lambda value", ylab = "Deviance ratio", 
      xlim = rev(range(mod_ndvi_inc_sysBP$log_lambda)), ylim = c(0.004, max(mod_ndvi_inc_sysBP$dev.ratio)))
@@ -5302,17 +4732,27 @@ text(df$log_lambda, 0.004, labels = df$Variables, srt = 90, adj = 0)
 dev.off()
 
 
-## From these results, would seem to be that not much is really going on here - Will do a likelihood ratio test to see whether inclusion of first parameter(s) added (green_ch23_int) increases model fit of standard linear regression model
+## From these results, would seem to be that not much is really going on here - Will do a likelihood ratio test to see whether inclusion of first parameter(s) added (int1) increases model fit of standard linear regression model
 base_mod <- lm(data_ndvi_inc_sysBP$sysBP ~ x_hypos[, "age_f7"] + x_hypos[, "male"] + x_hypos[, "white"] + 
                  x_hypos[, "lowIncome"])
 summary(base_mod)
 
 param1_mod <- lm(data_ndvi_inc_sysBP$sysBP ~ x_hypos[, "age_f7"] + x_hypos[, "male"] + 
-                   x_hypos[, "white"] + x_hypos[, "lowIncome"] + x_hypos[, "green_ch23_int"])
+                   x_hypos[, "white"] + x_hypos[, "lowIncome"] + x_hypos[, "int1"])
 summary(param1_mod)
 
-# No real association here
+# Is an association here, with higher NDVI values in pregnancy associated with higher systolic blood pressure among children with low household income (but small effect, inconsistent with most other results, and in 'wrong' direction, coudl just be random variability)
 anova(base_mod, param1_mod)
+
+coef(summary(param1_mod))
+confint(param1_mod)
+
+# Does inclusion of next parameter (int2) improve model fit? No
+param2_mod <- lm(data_ndvi_inc_sysBP$sysBP ~ x_hypos[, "age_f7"] + x_hypos[, "male"] + 
+                   x_hypos[, "white"] + x_hypos[, "lowIncome"] + x_hypos[, "int1"] + x_hypos[, "int2"])
+summary(param2_mod)
+
+anova(param1_mod, param2_mod)
 
 
 ## Alternative method using cross-validated lasso to find find 'optimal' model for out-of-sample prediction.
@@ -5323,7 +4763,7 @@ mod.cv
 # Plot the log lambda by MSE to show both 'optimal' and '1SE' models (number of parameters is at top of plot)
 plot(mod.cv)
 
-# Parameters in the 1SE and 'optimal' models - Both just contains just the 4 parameters included by default (age, sex, ethnicity and education), suggesting no association with NDVI exposure
+# Parameters in the 1SE and 'optimal' models - The 1SE model just contains just the 4 parameters included by default (age, sex, ethnicity and education), suggesting no association with NDVI exposure; while the minimum MSE model also contains 'int1', but the MSE improvement is minimal.
 coef(mod.cv, s = mod.cv$lambda.1se)
 coef(mod.cv, s = mod.cv$lambda.min)
 
@@ -5340,6 +4780,7 @@ data_ndvi_inc_diaBP <- data_ndvi_inc %>%
   filter(complete.cases(diaBP, age_f7, male, white, lowIncome, crit1, int1))
 
 summary(data_ndvi_inc_diaBP)
+nrow(data_ndvi_inc_diaBP)
 
 # Save the life-course hypotheses and covariates as a matrix
 x_hypos <- data_ndvi_inc_diaBP %>%
@@ -5362,29 +4803,12 @@ mod_ndvi_inc_diaBP
 # Plot these results
 plot(mod_ndvi_inc_diaBP)
 
-# Look at the variables included at each step
-coef(mod_ndvi_inc_diaBP, s = max(mod_ndvi_inc_diaBP$lambda[mod_ndvi_inc_diaBP$df == 4])); min(mod_ndvi_inc_diaBP$dev.ratio[mod_ndvi_inc_diaBP$df == 4])
-
-coef(mod_ndvi_inc_diaBP, s = max(mod_ndvi_inc_diaBP$lambda[mod_ndvi_inc_diaBP$df == 5])); min(mod_ndvi_inc_diaBP$dev.ratio[mod_ndvi_inc_diaBP$df == 5])
-
-coef(mod_ndvi_inc_diaBP, s = max(mod_ndvi_inc_diaBP$lambda[mod_ndvi_inc_diaBP$df == 6])); min(mod_ndvi_inc_diaBP$dev.ratio[mod_ndvi_inc_diaBP$df == 6])
-
-coef(mod_ndvi_inc_diaBP, s = max(mod_ndvi_inc_diaBP$lambda[mod_ndvi_inc_diaBP$df == 7])); min(mod_ndvi_inc_diaBP$dev.ratio[mod_ndvi_inc_diaBP$df == 7])
-
 
 ### Visual inspection of results (although just looking at the deviance ratios there doesn't seem to be much of an effect of access to green space at all)
 
 # First, use the 'lasso-table' function defined above to pick out the changes in variables and the increment in deviance ratio
 df <- lasso_table(mod_ndvi_inc_diaBP)
 df
-
-
-# Make a plot of deviance ratio by lambda value, to show the time variables were entered and the improvement in model fit. Need to be careful about scale of y-axis, as improvement in model fit may not that large.
-plot(mod_ndvi_inc_diaBP$lambda, mod_ndvi_inc_diaBP$dev.ratio, type = "l",
-     xlab = "Lambda value", ylab = "Deviance ratio", 
-     xlim = rev(range(mod_ndvi_inc_diaBP$lambda)), ylim = c(0, max(mod_ndvi_inc_diaBP$dev.ratio)))
-text(df$Lambda, 0, labels = df$Variables, srt = 90, adj = 0)
-
 
 ## Put lambda on the log scale, else differences between early models inflated, as lambda decreases on log scale. This does make the plot slightly more readable, and groups early-included variables closer together
 mod_ndvi_inc_diaBP$log_lambda <- log(mod_ndvi_inc_diaBP$lambda)
@@ -5393,17 +4817,17 @@ mod_ndvi_inc_diaBP
 df$log_lambda <- log(as.numeric(df$Lambda))
 df
 
-# This looks better, although same issues as above re. interpreting the first variable added (doesn't mean is a strong predictor of outcome).
+# Make the plot
 plot(mod_ndvi_inc_diaBP$log_lambda, mod_ndvi_inc_diaBP$dev.ratio, type = "l",
      xlab = "Log lambda value", ylab = "Deviance ratio", 
      xlim = rev(range(mod_ndvi_inc_diaBP$log_lambda)), ylim = c(0.004, max(mod_ndvi_inc_diaBP$dev.ratio)))
 text(df$log_lambda, 0.004, labels = df$Variables, srt = 90, adj = 0)
 
 # save this plot
-pdf(file = "LogLambdaPlot_NDVIIncomeDiaBP.pdf", height = 7, width = 11)
-plot(mod_ndvi_dep_diaBP$log_lambda, mod_ndvi_dep_diaBP$dev.ratio, type = "l",
+pdf(file = "LogLambdaPlot_NDVIIncomeDiaBP.pdf", height = 6, width = 10)
+plot(mod_ndvi_inc_diaBP$log_lambda, mod_ndvi_inc_diaBP$dev.ratio, type = "l",
      xlab = "Log lambda value", ylab = "Deviance ratio", 
-     xlim = rev(range(mod_ndvi_dep_diaBP$log_lambda)), ylim = c(0.004, max(mod_ndvi_dep_diaBP$dev.ratio)))
+     xlim = rev(range(mod_ndvi_inc_diaBP$log_lambda)), ylim = c(0.004, max(mod_ndvi_inc_diaBP$dev.ratio)))
 text(df$log_lambda, 0.004, labels = df$Variables, srt = 90, adj = 0)
 dev.off()
 
@@ -5456,51 +4880,59 @@ data_garden <- data
 
 # Critical period at first time point only
 data_garden$crit1 <- data_garden$garden_preg
+data_garden$crit1 <- data_garden$crit1 - mean(data_garden$crit1, na.rm = TRUE)
 
 # Interaction between SEP and first time point
-data_garden$int1 <- data_garden$edu * data_garden$garden_preg
+data_garden$int1 <- data_garden$edu * data_garden$crit1
 
 # Critical period at second time point only
 data_garden$crit2 <- data_garden$garden_4
+data_garden$crit2 <- data_garden$crit2 - mean(data_garden$crit2, na.rm = TRUE)
 
 # Interaction between SEP and second time point
-data_garden$int2 <- data_garden$edu * data_garden$garden_4
+data_garden$int2 <- data_garden$edu * data_garden$crit2
 
 # Critical period at third time point only
 data_garden$crit3 <- data_garden$garden_7
+data_garden$crit3 <- data_garden$crit3 - mean(data_garden$crit3, na.rm = TRUE)
 
 # Interaction between SEP and third time point
-data_garden$int3 <- data_garden$edu * data_garden$garden_7
+data_garden$int3 <- data_garden$edu * data_garden$crit3
 
 # Linear accumulation of all exposures
 data_garden$accumulation <- data_garden$garden_preg + data_garden$garden_4 + data_garden$garden_7
+data_garden$accumulation <- data_garden$accumulation - mean(data_garden$accumulation, na.rm = TRUE)
 
 # Interaction between SEP and cumulative exposure
 data_garden$int_accum <- data_garden$edu * data_garden$accumulation
 
 # Increase in access to green space from time 1 to time 2
 data_garden$green_inc12 <- (1 - data_garden$garden_preg) * data_garden$garden_4
+data_garden$green_inc12 <- data_garden$green_inc12 - mean(data_garden$green_inc12, na.rm = TRUE)
 
 # Increase in access to green space from time 1 to time 2, with an interaction with SEP
-data_garden$green_inc12_int <- (1 - data_garden$garden_preg) * data_garden$garden_4 * data_garden$edu
+data_garden$green_inc12_int <- data_garden$green_inc12 * data_garden$edu
 
 # Decrease in access to green space from time 1 to time 2
 data_garden$green_dec12 <- (1 - data_garden$garden_4) * data_garden$garden_preg
+data_garden$green_dec12 <- data_garden$green_dec12 - mean(data_garden$green_dec12, na.rm = TRUE)
 
 # Decrease in access to green space from time 1 to time 2, with an interaction with SEP
-data_garden$green_dec12_int <- (1 - data_garden$garden_4) * data_garden$garden_preg * data_garden$edu
+data_garden$green_dec12_int <- data_garden$green_dec12 * data_garden$edu
 
 # Increase in access to green space from time 2 to time 3
 data_garden$green_inc23 <- (1 - data_garden$garden_4) * data_garden$garden_7
+data_garden$green_inc23 <- data_garden$green_inc23 - mean(data_garden$green_inc23, na.rm = TRUE)
 
 # Increase in access to green space from time 2 to time 3, with an interaction with SEP
-data_garden$green_inc23_int <- (1 - data_garden$garden_4) * data_garden$garden_7 * data_garden$edu
+data_garden$green_inc23_int <- data_garden$green_inc23 * data_garden$edu
 
 # Decrease in access to green space from time 2 to time 3
 data_garden$green_dec23 <- (1 - data_garden$garden_7) * data_garden$garden_4
+data_garden$green_dec23 <- data_garden$green_dec23 - mean(data_garden$green_dec23, na.rm = TRUE)
 
 # Decrease in access to green space from time 2 to time 3, with an interaction with SEP
-data_garden$green_dec23_int <- (1 - data_garden$garden_7) * data_garden$garden_4 * data_garden$edu
+data_garden$green_dec23_int <- data_garden$green_dec23 * data_garden$edu
 
 
 ## Make a dataset just with the outcomes, exposure hypotheses and covariates
@@ -5519,6 +4951,7 @@ data_garden_edu_bmi <- data_garden_edu %>%
   filter(complete.cases(BMI_f7, age_f7, male, white, edu, crit1, int1))
 
 summary(data_garden_edu_bmi)
+nrow(data_garden_edu_bmi)
 
 # Save the life-course hypotheses and covariates as a matrix
 x_hypos <- data_garden_edu_bmi %>%
@@ -5533,14 +4966,7 @@ cor(x_hypos[,5:20])
 cor(x_hypos[,5:20]) > 0.9
 cor(x_hypos[,5:20]) > 0.95
 
-# Biggest issues are with the accumulation variables, which are highly correlated with the critical period variables, so will drop these accumulation variables from these analysis due to collinearity and effectively measuring the same thing. Unlike the other exposures, here the main issue is with the accumulation interaction, rather than the accumulation-only variable, so will just drop the interaction term here. The critical period interaction terms also have very high correlations with one another here (r > 0.95), but as each interaction term refers to a specific critical period, will just leave as is.
-x_hypos <- x_hypos[,!colnames(x_hypos) %in% c("int_accum")]
-head(x_hypos)
-
-dim(x_hypos)
-cor(x_hypos[,5:19])
-cor(x_hypos[,5:19]) > 0.9
-cor(x_hypos[,5:19]) > 0.95
+# For these 'access to garden' exposures all correlations are <0.9 (even for 'accumulation'), so will just keep all variables in these analyses.
 
 
 ## Run the Lasso model using GLMNET. alpha = 1 specifies L1 regularisation (lasso model), and the penalty factor option gives covariates (edu, age, sex and white) weightings of '0', so are always included in the model (default is 1)
@@ -5553,28 +4979,12 @@ mod_garden_edu_bmi
 # Plot these results
 plot(mod_garden_edu_bmi)
 
-# Look at the variables included at each step
-coef(mod_garden_edu_bmi, s = max(mod_garden_edu_bmi$lambda[mod_garden_edu_bmi$df == 4])); min(mod_garden_edu_bmi$dev.ratio[mod_garden_edu_bmi$df == 4])
-
-coef(mod_garden_edu_bmi, s = max(mod_garden_edu_bmi$lambda[mod_garden_edu_bmi$df == 5])); min(mod_garden_edu_bmi$dev.ratio[mod_garden_edu_bmi$df == 5])
-
-coef(mod_garden_edu_bmi, s = max(mod_garden_edu_bmi$lambda[mod_garden_edu_bmi$df == 6])); min(mod_garden_edu_bmi$dev.ratio[mod_garden_edu_bmi$df == 6])
-
-coef(mod_garden_edu_bmi, s = max(mod_garden_edu_bmi$lambda[mod_garden_edu_bmi$df == 7])); min(mod_garden_edu_bmi$dev.ratio[mod_garden_edu_bmi$df == 7])
-
 
 ### Visual inspection of results (although just looking at the deviance ratios there doesn't seem to be much of an effect of access to green space at all)
 
 # First, use the 'lasso-table' function defined above to pick out the changes in variables and the increment in deviance ratio
 df <- lasso_table(mod_garden_edu_bmi)
 df
-
-
-# Make a plot of deviance ratio by lambda value, to show the time variables were entered and the improvement in model fit. This makes it clearer when different variables were added (not the neatest plot, though, as variables bunch up and overlap as lambda approaches 0...). Also, need to be careful about scale of y-axis, as improvement in model fit may not that large.
-plot(mod_garden_edu_bmi$lambda, mod_garden_edu_bmi$dev.ratio, type = "l",
-     xlab = "Lambda value", ylab = "Deviance ratio", 
-     xlim = rev(range(mod_garden_edu_bmi$lambda)), ylim = c(0, max(mod_garden_edu_bmi$dev.ratio)))
-text(df$Lambda, 0, labels = df$Variables, srt = 90, adj = 0)
 
 ## Put lambda on the log scale, else differences between early models inflated, as lambda decreases on log scale. This does make the plot slightly more readable, and groups early-included variables closer together
 mod_garden_edu_bmi$log_lambda <- log(mod_garden_edu_bmi$lambda)
@@ -5583,15 +4993,14 @@ mod_garden_edu_bmi
 df$log_lambda <- log(as.numeric(df$Lambda))
 df
 
-
-# This looks better, although same issues as above re. interpreting the first variable added (doesn't mean is a strong predictor of outcome).
+# Make the plot
 plot(mod_garden_edu_bmi$log_lambda, mod_garden_edu_bmi$dev.ratio, type = "l",
      xlab = "Log lambda value", ylab = "Deviance ratio", 
      xlim = rev(range(mod_garden_edu_bmi$log_lambda)), ylim = c(0.004, max(mod_garden_edu_bmi$dev.ratio)))
 text(df$log_lambda, 0.004, labels = df$Variables, srt = 90, adj = 0)
 
 # save this plot
-pdf(file = "LogLambdaPlot_gardenEduBMI.pdf", height = 7, width = 11)
+pdf(file = "LogLambdaPlot_gardenEduBMI.pdf", height = 6, width = 10)
 plot(mod_garden_edu_bmi$log_lambda, mod_garden_edu_bmi$dev.ratio, type = "l",
      xlab = "Log lambda value", ylab = "Deviance ratio", 
      xlim = rev(range(mod_garden_edu_bmi$log_lambda)), ylim = c(0.004, max(mod_garden_edu_bmi$dev.ratio)))
@@ -5637,15 +5046,13 @@ data_garden_edu_overweight <- data_garden_edu %>%
   filter(complete.cases(overweight, age_f7, male, white, edu, crit1, int1))
 
 summary(data_garden_edu_overweight)
+nrow(data_garden_edu_overweight)
 
 # Save the life-course hypotheses and covariates as a matrix
 x_hypos <- data_garden_edu_overweight %>%
   select(-overweight)
 
 x_hypos <- as.matrix(x_hypos)
-
-## Remove the accumulation interaction variable (as high collinearity with critical period hypotheses)
-x_hypos <- x_hypos[,!colnames(x_hypos) %in% c("int_accum")]
 head(x_hypos)
 
 
@@ -5659,29 +5066,12 @@ mod_garden_edu_over
 # Plot these results
 plot(mod_garden_edu_over)
 
-# Look at the variables included at each step
-coef(mod_garden_edu_over, s = max(mod_garden_edu_over$lambda[mod_garden_edu_over$df == 4])); min(mod_garden_edu_over$dev.ratio[mod_garden_edu_over$df == 4])
-
-coef(mod_garden_edu_over, s = max(mod_garden_edu_over$lambda[mod_garden_edu_over$df == 5])); min(mod_garden_edu_over$dev.ratio[mod_garden_edu_over$df == 5])
-
-coef(mod_garden_edu_over, s = max(mod_garden_edu_over$lambda[mod_garden_edu_over$df == 6])); min(mod_garden_edu_over$dev.ratio[mod_garden_edu_over$df == 6])
-
-coef(mod_garden_edu_over, s = max(mod_garden_edu_over$lambda[mod_garden_edu_over$df == 8])); min(mod_garden_edu_over$dev.ratio[mod_garden_edu_over$df == 8])
-
 
 ### Visual inspection of results (although just looking at the deviance ratios there doesn't seem to be much of an effect of access to green space at all)
 
 # First, use the 'lasso-table' function defined above to pick out the changes in variables and the increment in deviance ratio
 df <- lasso_table(mod_garden_edu_over)
 df
-
-
-# Make a plot of deviance ratio by lambda value, to show the time variables were entered and the improvement in model fit. Need to be careful about scale of y-axis, as improvement in model fit may not that large.
-plot(mod_garden_edu_over$lambda, mod_garden_edu_over$dev.ratio, type = "l",
-     xlab = "Lambda value", ylab = "Deviance ratio", 
-     xlim = rev(range(mod_garden_edu_over$lambda)), ylim = c(0, max(mod_garden_edu_over$dev.ratio)))
-text(df$Lambda, 0, labels = df$Variables, srt = 90, adj = 0)
-
 
 ## Put lambda on the log scale, else differences between early models inflated, as lambda decreases on log scale. This does make the plot slightly more readable, and groups early-included variables closer together
 mod_garden_edu_over$log_lambda <- log(mod_garden_edu_over$lambda)
@@ -5690,14 +5080,14 @@ mod_garden_edu_over
 df$log_lambda <- log(as.numeric(df$Lambda))
 df
 
-# This looks better, although same issues as above re. interpreting the first variable added (doesn't mean is a strong predictor of outcome).
+# Make the plot
 plot(mod_garden_edu_over$log_lambda, mod_garden_edu_over$dev.ratio, type = "l",
      xlab = "Log lambda value", ylab = "Deviance ratio", 
      xlim = rev(range(mod_garden_edu_over$log_lambda)), ylim = c(0.001, max(mod_garden_edu_over$dev.ratio)))
 text(df$log_lambda, 0.001, labels = df$Variables, srt = 90, adj = 0)
 
 # save this plot
-pdf(file = "LogLambdaPlot_gardenEduOverweight.pdf", height = 7, width = 11)
+pdf(file = "LogLambdaPlot_gardenEduOverweight.pdf", height = 6, width = 10)
 plot(mod_garden_edu_over$log_lambda, mod_garden_edu_over$dev.ratio, type = "l",
      xlab = "Log lambda value", ylab = "Deviance ratio", 
      xlim = rev(range(mod_garden_edu_over$log_lambda)), ylim = c(0.001, max(mod_garden_edu_over$dev.ratio)))
@@ -5743,15 +5133,13 @@ data_garden_edu_sysBP <- data_garden_edu %>%
   filter(complete.cases(sysBP, age_f7, male, white, edu, crit1, int1))
 
 summary(data_garden_edu_sysBP)
+nrow(data_garden_edu_sysBP)
 
 # Save the life-course hypotheses and covariates as a matrix
 x_hypos <- data_garden_edu_sysBP %>%
   select(-sysBP)
 
 x_hypos <- as.matrix(x_hypos)
-
-## Remove the accumulation interaction variable (as high collinearity with critical period hypotheses)
-x_hypos <- x_hypos[,!colnames(x_hypos) %in% c("int_accum")]
 head(x_hypos)
 
 
@@ -5765,29 +5153,12 @@ mod_garden_edu_sysBP
 # Plot these results
 plot(mod_garden_edu_sysBP)
 
-# Look at the variables included at each step
-coef(mod_garden_edu_sysBP, s = max(mod_garden_edu_sysBP$lambda[mod_garden_edu_sysBP$df == 4])); min(mod_garden_edu_sysBP$dev.ratio[mod_garden_edu_sysBP$df == 4])
-
-coef(mod_garden_edu_sysBP, s = max(mod_garden_edu_sysBP$lambda[mod_garden_edu_sysBP$df == 5])); min(mod_garden_edu_sysBP$dev.ratio[mod_garden_edu_sysBP$df == 5])
-
-coef(mod_garden_edu_sysBP, s = max(mod_garden_edu_sysBP$lambda[mod_garden_edu_sysBP$df == 6])); min(mod_garden_edu_sysBP$dev.ratio[mod_garden_edu_sysBP$df == 6])
-
-coef(mod_garden_edu_sysBP, s = max(mod_garden_edu_sysBP$lambda[mod_garden_edu_sysBP$df == 7])); min(mod_garden_edu_sysBP$dev.ratio[mod_garden_edu_sysBP$df == 7])
-
 
 ### Visual inspection of results (although just looking at the deviance ratios there doesn't seem to be much of an effect of access to green space at all)
 
 # First, use the 'lasso-table' function defined above to pick out the changes in variables and the increment in deviance ratio
 df <- lasso_table(mod_garden_edu_sysBP)
 df
-
-
-# Make a plot of deviance ratio by lambda value, to show the time variables were entered and the improvement in model fit. Need to be careful about scale of y-axis, as improvement in model fit may not that large.
-plot(mod_garden_edu_sysBP$lambda, mod_garden_edu_sysBP$dev.ratio, type = "l",
-     xlab = "Lambda value", ylab = "Deviance ratio", 
-     xlim = rev(range(mod_garden_edu_sysBP$lambda)), ylim = c(0, max(mod_garden_edu_sysBP$dev.ratio)))
-text(df$Lambda, 0, labels = df$Variables, srt = 90, adj = 0)
-
 
 ## Put lambda on the log scale, else differences between early models inflated, as lambda decreases on log scale. This does make the plot slightly more readable, and groups early-included variables closer together
 mod_garden_edu_sysBP$log_lambda <- log(mod_garden_edu_sysBP$lambda)
@@ -5796,14 +5167,14 @@ mod_garden_edu_sysBP
 df$log_lambda <- log(as.numeric(df$Lambda))
 df
 
-# This looks better, although same issues as above re. interpreting the first variable added (doesn't mean is a strong predictor of outcome).
+# Make the plot
 plot(mod_garden_edu_sysBP$log_lambda, mod_garden_edu_sysBP$dev.ratio, type = "l",
      xlab = "Log lambda value", ylab = "Deviance ratio", 
      xlim = rev(range(mod_garden_edu_sysBP$log_lambda)), ylim = c(0.006, max(mod_garden_edu_sysBP$dev.ratio)))
 text(df$log_lambda, 0.006, labels = df$Variables, srt = 90, adj = 0)
 
 # save this plot
-pdf(file = "LogLambdaPlot_gardenEduSysBP.pdf", height = 7, width = 11)
+pdf(file = "LogLambdaPlot_gardenEduSysBP.pdf", height = 6, width = 10)
 plot(mod_garden_edu_sysBP$log_lambda, mod_garden_edu_sysBP$dev.ratio, type = "l",
      xlab = "Log lambda value", ylab = "Deviance ratio", 
      xlim = rev(range(mod_garden_edu_sysBP$log_lambda)), ylim = c(0.006, max(mod_garden_edu_sysBP$dev.ratio)))
@@ -5849,15 +5220,13 @@ data_garden_edu_diaBP <- data_garden_edu %>%
   filter(complete.cases(diaBP, age_f7, male, white, edu, crit1, int1))
 
 summary(data_garden_edu_diaBP)
+nrow(data_garden_edu_diaBP)
 
 # Save the life-course hypotheses and covariates as a matrix
 x_hypos <- data_garden_edu_diaBP %>%
   select(-diaBP)
 
 x_hypos <- as.matrix(x_hypos)
-
-## Remove the accumulation interaction variable (as high collinearity with critical period hypotheses)
-x_hypos <- x_hypos[,!colnames(x_hypos) %in% c("int_accum")]
 head(x_hypos)
 
 
@@ -5871,29 +5240,12 @@ mod_garden_edu_diaBP
 # Plot these results
 plot(mod_garden_edu_diaBP)
 
-# Look at the variables included at each step
-coef(mod_garden_edu_diaBP, s = max(mod_garden_edu_diaBP$lambda[mod_garden_edu_diaBP$df == 4])); min(mod_garden_edu_diaBP$dev.ratio[mod_garden_edu_diaBP$df == 4])
-
-coef(mod_garden_edu_diaBP, s = max(mod_garden_edu_diaBP$lambda[mod_garden_edu_diaBP$df == 5])); min(mod_garden_edu_diaBP$dev.ratio[mod_garden_edu_diaBP$df == 5])
-
-coef(mod_garden_edu_diaBP, s = max(mod_garden_edu_diaBP$lambda[mod_garden_edu_diaBP$df == 6])); min(mod_garden_edu_diaBP$dev.ratio[mod_garden_edu_diaBP$df == 6])
-
-coef(mod_garden_edu_diaBP, s = max(mod_garden_edu_diaBP$lambda[mod_garden_edu_diaBP$df == 7])); min(mod_garden_edu_diaBP$dev.ratio[mod_garden_edu_diaBP$df == 7])
-
 
 ### Visual inspection of results (although just looking at the deviance ratios there doesn't seem to be much of an effect of access to green space at all)
 
 # First, use the 'lasso-table' function defined above to pick out the changes in variables and the increment in deviance ratio
 df <- lasso_table(mod_garden_edu_diaBP)
 df
-
-
-# Make a plot of deviance ratio by lambda value, to show the time variables were entered and the improvement in model fit. Need to be careful about scale of y-axis, as improvement in model fit may not that large.
-plot(mod_garden_edu_diaBP$lambda, mod_garden_edu_diaBP$dev.ratio, type = "l",
-     xlab = "Lambda value", ylab = "Deviance ratio", 
-     xlim = rev(range(mod_garden_edu_diaBP$lambda)), ylim = c(0, max(mod_garden_edu_diaBP$dev.ratio)))
-text(df$Lambda, 0, labels = df$Variables, srt = 90, adj = 0)
-
 
 ## Put lambda on the log scale, else differences between early models inflated, as lambda decreases on log scale. This does make the plot slightly more readable, and groups early-included variables closer together
 mod_garden_edu_diaBP$log_lambda <- log(mod_garden_edu_diaBP$lambda)
@@ -5902,14 +5254,14 @@ mod_garden_edu_diaBP
 df$log_lambda <- log(as.numeric(df$Lambda))
 df
 
-# This looks better, although same issues as above re. interpreting the first variable added (doesn't mean is a strong predictor of outcome). No obvious strong effects
+# Make the plot
 plot(mod_garden_edu_diaBP$log_lambda, mod_garden_edu_diaBP$dev.ratio, type = "l",
      xlab = "Log lambda value", ylab = "Deviance ratio", 
      xlim = rev(range(mod_garden_edu_diaBP$log_lambda)), ylim = c(0.004, max(mod_garden_edu_diaBP$dev.ratio)))
 text(df$log_lambda, 0.004, labels = df$Variables, srt = 90, adj = 0)
 
 # save this plot
-pdf(file = "LogLambdaPlot_gardenEduDiaBP.pdf", height = 7, width = 11)
+pdf(file = "LogLambdaPlot_gardenEduDiaBP.pdf", height = 6, width = 10)
 plot(mod_garden_edu_diaBP$log_lambda, mod_garden_edu_diaBP$dev.ratio, type = "l",
      xlab = "Log lambda value", ylab = "Deviance ratio", 
      xlim = rev(range(mod_garden_edu_diaBP$log_lambda)), ylim = c(0.004, max(mod_garden_edu_diaBP$dev.ratio)))
@@ -5964,51 +5316,59 @@ data_garden <- data
 
 # Critical period at first time point only
 data_garden$crit1 <- data_garden$garden_preg
+data_garden$crit1 <- data_garden$crit1 - mean(data_garden$crit1, na.rm = TRUE)
 
 # Interaction between SEP and first time point
-data_garden$int1 <- data_garden$deprived * data_garden$garden_preg
+data_garden$int1 <- data_garden$deprived * data_garden$crit1
 
 # Critical period at second time point only
 data_garden$crit2 <- data_garden$garden_4
+data_garden$crit2 <- data_garden$crit2 - mean(data_garden$crit2, na.rm = TRUE)
 
 # Interaction between SEP and second time point
-data_garden$int2 <- data_garden$deprived * data_garden$garden_4
+data_garden$int2 <- data_garden$deprived * data_garden$crit2
 
 # Critical period at third time point only
 data_garden$crit3 <- data_garden$garden_7
+data_garden$crit3 <- data_garden$crit3 - mean(data_garden$crit3, na.rm = TRUE)
 
 # Interaction between SEP and third time point
-data_garden$int3 <- data_garden$deprived * data_garden$garden_7
+data_garden$int3 <- data_garden$deprived * data_garden$crit3
 
 # Linear accumulation of all exposures
 data_garden$accumulation <- data_garden$garden_preg + data_garden$garden_4 + data_garden$garden_7
+data_garden$accumulation <- data_garden$accumulation - mean(data_garden$accumulation, na.rm = TRUE)
 
 # Interaction between SEP and cumulative exposure
 data_garden$int_accum <- data_garden$deprived * data_garden$accumulation
 
 # Increase in access to green space from time 1 to time 2
 data_garden$green_inc12 <- (1 - data_garden$garden_preg) * data_garden$garden_4
+data_garden$green_inc12 <- data_garden$green_inc12 - mean(data_garden$green_inc12, na.rm = TRUE)
 
 # Increase in access to green space from time 1 to time 2, with an interaction with SEP
-data_garden$green_inc12_int <- (1 - data_garden$garden_preg) * data_garden$garden_4 * data_garden$deprived
+data_garden$green_inc12_int <- data_garden$green_inc12 * data_garden$deprived
 
 # Decrease in access to green space from time 1 to time 2
 data_garden$green_dec12 <- (1 - data_garden$garden_4) * data_garden$garden_preg
+data_garden$green_dec12 <- data_garden$green_dec12 - mean(data_garden$green_dec12, na.rm = TRUE)
 
 # Decrease in access to green space from time 1 to time 2, with an interaction with SEP
-data_garden$green_dec12_int <- (1 - data_garden$garden_4) * data_garden$garden_preg * data_garden$deprived
+data_garden$green_dec12_int <- data_garden$green_dec12 * data_garden$deprived
 
 # Increase in access to green space from time 2 to time 3
 data_garden$green_inc23 <- (1 - data_garden$garden_4) * data_garden$garden_7
+data_garden$green_inc23 <- data_garden$green_inc23 - mean(data_garden$green_inc23, na.rm = TRUE)
 
 # Increase in access to green space from time 2 to time 3, with an interaction with SEP
-data_garden$green_inc23_int <- (1 - data_garden$garden_4) * data_garden$garden_7 * data_garden$deprived
+data_garden$green_inc23_int <- data_garden$green_inc23 * data_garden$deprived
 
 # Decrease in access to green space from time 2 to time 3
 data_garden$green_dec23 <- (1 - data_garden$garden_7) * data_garden$garden_4
+data_garden$green_dec23 <- data_garden$green_dec23 - mean(data_garden$green_dec23, na.rm = TRUE)
 
 # Decrease in access to green space from time 2 to time 3, with an interaction with SEP
-data_garden$green_dec23_int <- (1 - data_garden$garden_7) * data_garden$garden_4 * data_garden$deprived
+data_garden$green_dec23_int <- data_garden$green_dec23 * data_garden$deprived
 
 
 ## Make a dataset just with the outcomes, exposure hypotheses and covariates
@@ -6027,6 +5387,7 @@ data_garden_dep_bmi <- data_garden_dep %>%
   filter(complete.cases(BMI_f7, age_f7, male, white, deprived, crit1, int1))
 
 summary(data_garden_dep_bmi)
+nrow(data_garden_dep_bmi)
 
 # Save the life-course hypotheses and covariates as a matrix
 x_hypos <- data_garden_dep_bmi %>%
@@ -6041,14 +5402,7 @@ cor(x_hypos[,5:20])
 cor(x_hypos[,5:20]) > 0.9
 cor(x_hypos[,5:20]) > 0.95
 
-# Biggest issues are with the accumulation variables, which are highly correlated with the critical period variables, so will drop these accumulation variables from these analysis due to collinearity and effectively measuring the same thing. Unlike the other exposures, here the main issue is with the accumulation interaction, rather than the accumulation-only variable, so will just drop the interaction term here. 
-x_hypos <- x_hypos[,!colnames(x_hypos) %in% c("int_accum")]
-head(x_hypos)
-
-dim(x_hypos)
-cor(x_hypos[,5:19])
-cor(x_hypos[,5:19]) > 0.9
-cor(x_hypos[,5:19]) > 0.95
+# All variables are < 0.9, so will keep all in (including 'accumulation' variables)
 
 
 ## Run the Lasso model using GLMNET. alpha = 1 specifies L1 regularisation (lasso model), and the penalty factor option gives covariates (dep, age, sex and white) weightings of '0', so are always included in the model (default is 1)
@@ -6061,28 +5415,12 @@ mod_garden_dep_bmi
 # Plot these results
 plot(mod_garden_dep_bmi)
 
-# Look at the variables included at each step
-coef(mod_garden_dep_bmi, s = max(mod_garden_dep_bmi$lambda[mod_garden_dep_bmi$df == 4])); min(mod_garden_dep_bmi$dev.ratio[mod_garden_dep_bmi$df == 4])
-
-coef(mod_garden_dep_bmi, s = max(mod_garden_dep_bmi$lambda[mod_garden_dep_bmi$df == 5])); min(mod_garden_dep_bmi$dev.ratio[mod_garden_dep_bmi$df == 5])
-
-coef(mod_garden_dep_bmi, s = max(mod_garden_dep_bmi$lambda[mod_garden_dep_bmi$df == 6])); min(mod_garden_dep_bmi$dev.ratio[mod_garden_dep_bmi$df == 6])
-
-coef(mod_garden_dep_bmi, s = max(mod_garden_dep_bmi$lambda[mod_garden_dep_bmi$df == 8])); min(mod_garden_dep_bmi$dev.ratio[mod_garden_dep_bmi$df == 8])
-
 
 ### Visual inspection of results (although just looking at the deviance ratios there doesn't seem to be much of an effect of access to green space at all)
 
 # First, use the 'lasso-table' function defined above to pick out the changes in variables and the increment in deviance ratio
 df <- lasso_table(mod_garden_dep_bmi)
 df
-
-
-# Make a plot of deviance ratio by lambda value, to show the time variables were entered and the improvement in model fit. This makes it clearer when different variables were added (not the neatest plot, though, as variables bunch up and overlap as lambda approaches 0...). Also, need to be careful about scale of y-axis, as improvement in model fit may not that large.
-plot(mod_garden_dep_bmi$lambda, mod_garden_dep_bmi$dev.ratio, type = "l",
-     xlab = "Lambda value", ylab = "Deviance ratio", 
-     xlim = rev(range(mod_garden_dep_bmi$lambda)), ylim = c(0, max(mod_garden_dep_bmi$dev.ratio)))
-text(df$Lambda, 0, labels = df$Variables, srt = 90, adj = 0)
 
 ## Put lambda on the log scale, else differences between early models inflated, as lambda decreases on log scale. This does make the plot slightly more readable, and groups early-included variables closer together
 mod_garden_dep_bmi$log_lambda <- log(mod_garden_dep_bmi$lambda)
@@ -6091,15 +5429,14 @@ mod_garden_dep_bmi
 df$log_lambda <- log(as.numeric(df$Lambda))
 df
 
-
-# This looks better, although same issues as above re. interpreting the first variable added (doesn't mean is a strong predictor of outcome).
+# Make the plot
 plot(mod_garden_dep_bmi$log_lambda, mod_garden_dep_bmi$dev.ratio, type = "l",
      xlab = "Log lambda value", ylab = "Deviance ratio", 
      xlim = rev(range(mod_garden_dep_bmi$log_lambda)), ylim = c(0.007, max(mod_garden_dep_bmi$dev.ratio)))
 text(df$log_lambda, 0.007, labels = df$Variables, srt = 90, adj = 0)
 
 # save this plot
-pdf(file = "LogLambdaPlot_gardenDepBMI.pdf", height = 7, width = 11)
+pdf(file = "LogLambdaPlot_gardenDepBMI.pdf", height = 6, width = 10)
 plot(mod_garden_dep_bmi$log_lambda, mod_garden_dep_bmi$dev.ratio, type = "l",
      xlab = "Log lambda value", ylab = "Deviance ratio", 
      xlim = rev(range(mod_garden_dep_bmi$log_lambda)), ylim = c(0.007, max(mod_garden_dep_bmi$dev.ratio)))
@@ -6145,15 +5482,13 @@ data_garden_dep_overweight <- data_garden_dep %>%
   filter(complete.cases(overweight, age_f7, male, white, deprived, crit1, int1))
 
 summary(data_garden_dep_overweight)
+nrow(data_garden_dep_overweight)
 
 # Save the life-course hypotheses and covariates as a matrix
 x_hypos <- data_garden_dep_overweight %>%
   select(-overweight)
 
 x_hypos <- as.matrix(x_hypos)
-
-## Remove the accumulation interaction variable (as high collinearity with critical period hypotheses)
-x_hypos <- x_hypos[,!colnames(x_hypos) %in% c("int_accum")]
 head(x_hypos)
 
 
@@ -6167,27 +5502,12 @@ mod_garden_dep_over
 # Plot these results
 plot(mod_garden_dep_over)
 
-# Look at the variables included at each step
-coef(mod_garden_dep_over, s = max(mod_garden_dep_over$lambda[mod_garden_dep_over$df == 4])); min(mod_garden_dep_over$dev.ratio[mod_garden_dep_over$df == 4])
-
-coef(mod_garden_dep_over, s = max(mod_garden_dep_over$lambda[mod_garden_dep_over$df == 5])); min(mod_garden_dep_over$dev.ratio[mod_garden_dep_over$df == 5])
-
-coef(mod_garden_dep_over, s = max(mod_garden_dep_over$lambda[mod_garden_dep_over$df == 6])); min(mod_garden_dep_over$dev.ratio[mod_garden_dep_over$df == 6])
-
 
 ### Visual inspection of results (although just looking at the deviance ratios there doesn't seem to be much of an effect of access to green space at all)
 
 # First, use the 'lasso-table' function defined above to pick out the changes in variables and the increment in deviance ratio
 df <- lasso_table(mod_garden_dep_over)
 df
-
-
-# Make a plot of deviance ratio by lambda value, to show the time variables were entered and the improvement in model fit. Need to be careful about scale of y-axis, as improvement in model fit may not that large.
-plot(mod_garden_dep_over$lambda, mod_garden_dep_over$dev.ratio, type = "l",
-     xlab = "Lambda value", ylab = "Deviance ratio", 
-     xlim = rev(range(mod_garden_dep_over$lambda)), ylim = c(0, max(mod_garden_dep_over$dev.ratio)))
-text(df$Lambda, 0, labels = df$Variables, srt = 90, adj = 0)
-
 
 ## Put lambda on the log scale, else differences between early models inflated, as lambda decreases on log scale. This does make the plot slightly more readable, and groups early-included variables closer together
 mod_garden_dep_over$log_lambda <- log(mod_garden_dep_over$lambda)
@@ -6196,14 +5516,14 @@ mod_garden_dep_over
 df$log_lambda <- log(as.numeric(df$Lambda))
 df
 
-# This looks better, although same issues as above re. interpreting the first variable added (doesn't mean is a strong predictor of outcome).
+# Make the plot
 plot(mod_garden_dep_over$log_lambda, mod_garden_dep_over$dev.ratio, type = "l",
      xlab = "Log lambda value", ylab = "Deviance ratio", 
      xlim = rev(range(mod_garden_dep_over$log_lambda)), ylim = c(0.003, max(mod_garden_dep_over$dev.ratio)))
 text(df$log_lambda, 0.003, labels = df$Variables, srt = 90, adj = 0)
 
 # save this plot
-pdf(file = "LogLambdaPlot_gardenDepOverweight.pdf", height = 7, width = 11)
+pdf(file = "LogLambdaPlot_gardenDepOverweight.pdf", height = 6, width = 10)
 plot(mod_garden_dep_over$log_lambda, mod_garden_dep_over$dev.ratio, type = "l",
      xlab = "Log lambda value", ylab = "Deviance ratio", 
      xlim = rev(range(mod_garden_dep_over$log_lambda)), ylim = c(0.003, max(mod_garden_dep_over$dev.ratio)))
@@ -6250,15 +5570,13 @@ data_garden_dep_sysBP <- data_garden_dep %>%
   filter(complete.cases(sysBP, age_f7, male, white, deprived, crit1, int1))
 
 summary(data_garden_dep_sysBP)
+nrow(data_garden_dep_sysBP)
 
 # Save the life-course hypotheses and covariates as a matrix
 x_hypos <- data_garden_dep_sysBP %>%
   select(-sysBP)
 
 x_hypos <- as.matrix(x_hypos)
-
-## Remove the accumulation interaction variable (as high collinearity with critical period hypotheses)
-x_hypos <- x_hypos[,!colnames(x_hypos) %in% c("int_accum")]
 head(x_hypos)
 
 
@@ -6272,29 +5590,12 @@ mod_garden_dep_sysBP
 # Plot these results
 plot(mod_garden_dep_sysBP)
 
-# Look at the variables included at each step
-coef(mod_garden_dep_sysBP, s = max(mod_garden_dep_sysBP$lambda[mod_garden_dep_sysBP$df == 4])); min(mod_garden_dep_sysBP$dev.ratio[mod_garden_dep_sysBP$df == 4])
-
-coef(mod_garden_dep_sysBP, s = max(mod_garden_dep_sysBP$lambda[mod_garden_dep_sysBP$df == 6])); min(mod_garden_dep_sysBP$dev.ratio[mod_garden_dep_sysBP$df == 6])
-
-coef(mod_garden_dep_sysBP, s = max(mod_garden_dep_sysBP$lambda[mod_garden_dep_sysBP$df == 7])); min(mod_garden_dep_sysBP$dev.ratio[mod_garden_dep_sysBP$df == 7])
-
-coef(mod_garden_dep_sysBP, s = max(mod_garden_dep_sysBP$lambda[mod_garden_dep_sysBP$df == 8])); min(mod_garden_dep_sysBP$dev.ratio[mod_garden_dep_sysBP$df == 8])
-
 
 ### Visual inspection of results (although just looking at the deviance ratios there doesn't seem to be much of an effect of access to green space at all)
 
 # First, use the 'lasso-table' function defined above to pick out the changes in variables and the increment in deviance ratio
 df <- lasso_table(mod_garden_dep_sysBP)
 df
-
-
-# Make a plot of deviance ratio by lambda value, to show the time variables were entered and the improvement in model fit. Need to be careful about scale of y-axis, as improvement in model fit may not that large.
-plot(mod_garden_dep_sysBP$lambda, mod_garden_dep_sysBP$dev.ratio, type = "l",
-     xlab = "Lambda value", ylab = "Deviance ratio", 
-     xlim = rev(range(mod_garden_dep_sysBP$lambda)), ylim = c(0, max(mod_garden_dep_sysBP$dev.ratio)))
-text(df$Lambda, 0, labels = df$Variables, srt = 90, adj = 0)
-
 
 ## Put lambda on the log scale, else differences between early models inflated, as lambda decreases on log scale. This does make the plot slightly more readable, and groups early-included variables closer together
 mod_garden_dep_sysBP$log_lambda <- log(mod_garden_dep_sysBP$lambda)
@@ -6303,14 +5604,14 @@ mod_garden_dep_sysBP
 df$log_lambda <- log(as.numeric(df$Lambda))
 df
 
-# This looks better, although same issues as above re. interpreting the first variable added (doesn't mean is a strong predictor of outcome).
+# Make the plot
 plot(mod_garden_dep_sysBP$log_lambda, mod_garden_dep_sysBP$dev.ratio, type = "l",
      xlab = "Log lambda value", ylab = "Deviance ratio", 
      xlim = rev(range(mod_garden_dep_sysBP$log_lambda)), ylim = c(0.004, max(mod_garden_dep_sysBP$dev.ratio)))
 text(df$log_lambda, 0.004, labels = df$Variables, srt = 90, adj = 0)
 
 # save this plot
-pdf(file = "LogLambdaPlot_gardenDepSysBP.pdf", height = 7, width = 11)
+pdf(file = "LogLambdaPlot_gardenDepSysBP.pdf", height = 6, width = 10)
 plot(mod_garden_dep_sysBP$log_lambda, mod_garden_dep_sysBP$dev.ratio, type = "l",
      xlab = "Log lambda value", ylab = "Deviance ratio", 
      xlim = rev(range(mod_garden_dep_sysBP$log_lambda)), ylim = c(0.004, max(mod_garden_dep_sysBP$dev.ratio)))
@@ -6356,15 +5657,13 @@ data_garden_dep_diaBP <- data_garden_dep %>%
   filter(complete.cases(diaBP, age_f7, male, white, deprived, crit1, int1))
 
 summary(data_garden_dep_diaBP)
+nrow(data_garden_dep_diaBP)
 
 # Save the life-course hypotheses and covariates as a matrix
 x_hypos <- data_garden_dep_diaBP %>%
   select(-diaBP)
 
 x_hypos <- as.matrix(x_hypos)
-
-## Remove the accumulation interaction variable (as high collinearity with critical period hypotheses)
-x_hypos <- x_hypos[,!colnames(x_hypos) %in% c("int_accum")]
 head(x_hypos)
 
 
@@ -6378,29 +5677,12 @@ mod_garden_dep_diaBP
 # Plot these results
 plot(mod_garden_dep_diaBP)
 
-# Look at the variables included at each step
-coef(mod_garden_dep_diaBP, s = max(mod_garden_dep_diaBP$lambda[mod_garden_dep_diaBP$df == 4])); min(mod_garden_dep_diaBP$dev.ratio[mod_garden_dep_diaBP$df == 4])
-
-coef(mod_garden_dep_diaBP, s = max(mod_garden_dep_diaBP$lambda[mod_garden_dep_diaBP$df == 5])); min(mod_garden_dep_diaBP$dev.ratio[mod_garden_dep_diaBP$df == 5])
-
-coef(mod_garden_dep_diaBP, s = max(mod_garden_dep_diaBP$lambda[mod_garden_dep_diaBP$df == 6])); min(mod_garden_dep_diaBP$dev.ratio[mod_garden_dep_diaBP$df == 6])
-
-coef(mod_garden_dep_diaBP, s = max(mod_garden_dep_diaBP$lambda[mod_garden_dep_diaBP$df == 8])); min(mod_garden_dep_diaBP$dev.ratio[mod_garden_dep_diaBP$df == 8])
-
 
 ### Visual inspection of results (although just looking at the deviance ratios there doesn't seem to be much of an effect of access to green space at all)
 
 # First, use the 'lasso-table' function defined above to pick out the changes in variables and the increment in deviance ratio
 df <- lasso_table(mod_garden_dep_diaBP)
 df
-
-
-# Make a plot of deviance ratio by lambda value, to show the time variables were entered and the improvement in model fit. Need to be careful about scale of y-axis, as improvement in model fit may not that large.
-plot(mod_garden_dep_diaBP$lambda, mod_garden_dep_diaBP$dev.ratio, type = "l",
-     xlab = "Lambda value", ylab = "Deviance ratio", 
-     xlim = rev(range(mod_garden_dep_diaBP$lambda)), ylim = c(0, max(mod_garden_dep_diaBP$dev.ratio)))
-text(df$Lambda, 0, labels = df$Variables, srt = 90, adj = 0)
-
 
 ## Put lambda on the log scale, else differences between early models inflated, as lambda decreases on log scale. This does make the plot slightly more readable, and groups early-included variables closer together
 mod_garden_dep_diaBP$log_lambda <- log(mod_garden_dep_diaBP$lambda)
@@ -6409,14 +5691,14 @@ mod_garden_dep_diaBP
 df$log_lambda <- log(as.numeric(df$Lambda))
 df
 
-# This looks better, although same issues as above re. interpreting the first variable added (doesn't mean is a strong predictor of outcome).
+# Make the plot
 plot(mod_garden_dep_diaBP$log_lambda, mod_garden_dep_diaBP$dev.ratio, type = "l",
      xlab = "Log lambda value", ylab = "Deviance ratio", 
      xlim = rev(range(mod_garden_dep_diaBP$log_lambda)), ylim = c(0.004, max(mod_garden_dep_diaBP$dev.ratio)))
 text(df$log_lambda, 0.004, labels = df$Variables, srt = 90, adj = 0)
 
 # save this plot
-pdf(file = "LogLambdaPlot_gardenDepDiaBP.pdf", height = 7, width = 11)
+pdf(file = "LogLambdaPlot_gardenDepDiaBP.pdf", height = 6, width = 10)
 plot(mod_garden_dep_diaBP$log_lambda, mod_garden_dep_diaBP$dev.ratio, type = "l",
      xlab = "Log lambda value", ylab = "Deviance ratio", 
      xlim = rev(range(mod_garden_dep_diaBP$log_lambda)), ylim = c(0.004, max(mod_garden_dep_diaBP$dev.ratio)))
@@ -6472,51 +5754,59 @@ data_garden <- data
 
 # Critical period at first time point only
 data_garden$crit1 <- data_garden$garden_preg
+data_garden$crit1 <- data_garden$crit1 - mean(data_garden$crit1, na.rm = TRUE)
 
 # Interaction between SEP and first time point
-data_garden$int1 <- data_garden$lowIncome * data_garden$garden_preg
+data_garden$int1 <- data_garden$lowIncome * data_garden$crit1
 
 # Critical period at second time point only
 data_garden$crit2 <- data_garden$garden_4
+data_garden$crit2 <- data_garden$crit2 - mean(data_garden$crit2, na.rm = TRUE)
 
 # Interaction between SEP and second time point
-data_garden$int2 <- data_garden$lowIncome * data_garden$garden_4
+data_garden$int2 <- data_garden$lowIncome * data_garden$crit2
 
 # Critical period at third time point only
 data_garden$crit3 <- data_garden$garden_7
+data_garden$crit3 <- data_garden$crit3 - mean(data_garden$crit3, na.rm = TRUE)
 
 # Interaction between SEP and third time point
-data_garden$int3 <- data_garden$lowIncome * data_garden$garden_7
+data_garden$int3 <- data_garden$lowIncome * data_garden$crit3
 
 # Linear accumulation of all exposures
 data_garden$accumulation <- data_garden$garden_preg + data_garden$garden_4 + data_garden$garden_7
+data_garden$accumulation <- data_garden$accumulation - mean(data_garden$accumulation, na.rm = TRUE)
 
 # Interaction between SEP and cumulative exposure
 data_garden$int_accum <- data_garden$lowIncome * data_garden$accumulation
 
 # Increase in access to green space from time 1 to time 2
 data_garden$green_inc12 <- (1 - data_garden$garden_preg) * data_garden$garden_4
+data_garden$green_inc12 <- data_garden$green_inc12 - mean(data_garden$green_inc12, na.rm = TRUE)
 
 # Increase in access to green space from time 1 to time 2, with an interaction with SEP
-data_garden$green_inc12_int <- (1 - data_garden$garden_preg) * data_garden$garden_4 * data_garden$lowIncome
+data_garden$green_inc12_int <- data_garden$green_inc12 * data_garden$lowIncome
 
 # Decrease in access to green space from time 1 to time 2
 data_garden$green_dec12 <- (1 - data_garden$garden_4) * data_garden$garden_preg
+data_garden$green_dec12 <- data_garden$green_dec12 - mean(data_garden$green_dec12, na.rm = TRUE)
 
 # Decrease in access to green space from time 1 to time 2, with an interaction with SEP
-data_garden$green_dec12_int <- (1 - data_garden$garden_4) * data_garden$garden_preg * data_garden$lowIncome
+data_garden$green_dec12_int <- data_garden$green_dec12 * data_garden$lowIncome
 
 # Increase in access to green space from time 2 to time 3
 data_garden$green_inc23 <- (1 - data_garden$garden_4) * data_garden$garden_7
+data_garden$green_inc23 <- data_garden$green_inc23 - mean(data_garden$green_inc23, na.rm = TRUE)
 
 # Increase in access to green space from time 2 to time 3, with an interaction with SEP
-data_garden$green_inc23_int <- (1 - data_garden$garden_4) * data_garden$garden_7 * data_garden$lowIncome
+data_garden$green_inc23_int <- data_garden$green_inc23 * data_garden$lowIncome
 
 # Decrease in access to green space from time 2 to time 3
 data_garden$green_dec23 <- (1 - data_garden$garden_7) * data_garden$garden_4
+data_garden$green_dec23 <- data_garden$green_dec23 - mean(data_garden$green_dec23, na.rm = TRUE)
 
 # Decrease in access to green space from time 2 to time 3, with an interaction with SEP
-data_garden$green_dec23_int <- (1 - data_garden$garden_7) * data_garden$garden_4 * data_garden$lowIncome
+data_garden$green_dec23_int <- data_garden$green_dec23 * data_garden$lowIncome
 
 
 ## Make a dataset just with the outcomes, exposure hypotheses and covariates
@@ -6535,6 +5825,7 @@ data_garden_inc_bmi <- data_garden_inc %>%
   filter(complete.cases(BMI_f7, age_f7, male, white, lowIncome, crit1, int1))
 
 summary(data_garden_inc_bmi)
+nrow(data_garden_inc_bmi)
 
 # Save the life-course hypotheses and covariates as a matrix
 x_hypos <- data_garden_inc_bmi %>%
@@ -6549,14 +5840,7 @@ cor(x_hypos[,5:20])
 cor(x_hypos[,5:20]) > 0.9
 cor(x_hypos[,5:20]) > 0.95
 
-# Biggest issues are with the accumulation variables, which are highly correlated with the critical period variables, so will drop these accumulation variables from these analysis due to collinearity and effectively measuring the same thing. Unlike the other exposures, here the main issue is with the accumulation interaction, rather than the accumulation-only variable, so will just drop the interaction term here.
-x_hypos <- x_hypos[,!colnames(x_hypos) %in% c("int_accum")]
-head(x_hypos)
-
-dim(x_hypos)
-cor(x_hypos[,5:19])
-cor(x_hypos[,5:19]) > 0.9
-cor(x_hypos[,5:19]) > 0.95
+# All corrs are <0.9 (even 'accumulation'), so will leave as is
 
 
 ## Run the Lasso model using GLMNET. alpha = 1 specifies L1 regularisation (lasso model), and the penalty factor option gives covariates (income, age, sex and white) weightings of '0', so are always included in the model (default is 1)
@@ -6569,28 +5853,12 @@ mod_garden_inc_bmi
 # Plot these results
 plot(mod_garden_inc_bmi)
 
-# Look at the variables included at each step
-coef(mod_garden_inc_bmi, s = max(mod_garden_inc_bmi$lambda[mod_garden_inc_bmi$df == 4])); min(mod_garden_inc_bmi$dev.ratio[mod_garden_inc_bmi$df == 4])
-
-coef(mod_garden_inc_bmi, s = max(mod_garden_inc_bmi$lambda[mod_garden_inc_bmi$df == 5])); min(mod_garden_inc_bmi$dev.ratio[mod_garden_inc_bmi$df == 5])
-
-coef(mod_garden_inc_bmi, s = max(mod_garden_inc_bmi$lambda[mod_garden_inc_bmi$df == 6])); min(mod_garden_inc_bmi$dev.ratio[mod_garden_inc_bmi$df == 6])
-
-coef(mod_garden_inc_bmi, s = max(mod_garden_inc_bmi$lambda[mod_garden_inc_bmi$df == 7])); min(mod_garden_inc_bmi$dev.ratio[mod_garden_inc_bmi$df == 7])
-
 
 ### Visual inspection of results (although just looking at the deviance ratios there doesn't seem to be much of an effect of access to green space at all)
 
 # First, use the 'lasso-table' function defined above to pick out the changes in variables and the increment in deviance ratio
 df <- lasso_table(mod_garden_inc_bmi)
 df
-
-
-# Make a plot of deviance ratio by lambda value, to show the time variables were entered and the improvement in model fit. This makes it clearer when different variables were added (not the neatest plot, though, as variables bunch up and overlap as lambda approaches 0...). Also, need to be careful about scale of y-axis, as improvement in model fit may not that large.
-plot(mod_garden_inc_bmi$lambda, mod_garden_inc_bmi$dev.ratio, type = "l",
-     xlab = "Lambda value", ylab = "Deviance ratio", 
-     xlim = rev(range(mod_garden_inc_bmi$lambda)), ylim = c(0, max(mod_garden_inc_bmi$dev.ratio)))
-text(df$Lambda, 0, labels = df$Variables, srt = 90, adj = 0)
 
 ## Put lambda on the log scale, else differences between early models inflated, as lambda decreases on log scale. This does make the plot slightly more readable, and groups early-included variables closer together
 mod_garden_inc_bmi$log_lambda <- log(mod_garden_inc_bmi$lambda)
@@ -6599,15 +5867,14 @@ mod_garden_inc_bmi
 df$log_lambda <- log(as.numeric(df$Lambda))
 df
 
-
-# This looks better, although same issues as above re. interpreting the first variable added (doesn't mean is a strong predictor of outcome).
+# Make the plot
 plot(mod_garden_inc_bmi$log_lambda, mod_garden_inc_bmi$dev.ratio, type = "l",
      xlab = "Log lambda value", ylab = "Deviance ratio", 
      xlim = rev(range(mod_garden_inc_bmi$log_lambda)), ylim = c(0.004, max(mod_garden_inc_bmi$dev.ratio)))
 text(df$log_lambda, 0.004, labels = df$Variables, srt = 90, adj = 0)
 
 # save this plot
-pdf(file = "LogLambdaPlot_gardenIncomeBMI.pdf", height = 7, width = 11)
+pdf(file = "LogLambdaPlot_gardenIncomeBMI.pdf", height = 6, width = 10)
 plot(mod_garden_inc_bmi$log_lambda, mod_garden_inc_bmi$dev.ratio, type = "l",
      xlab = "Log lambda value", ylab = "Deviance ratio", 
      xlim = rev(range(mod_garden_inc_bmi$log_lambda)), ylim = c(0.004, max(mod_garden_inc_bmi$dev.ratio)))
@@ -6615,13 +5882,13 @@ text(df$log_lambda, 0.004, labels = df$Variables, srt = 90, adj = 0)
 dev.off()
 
 
-## From these results, would seem to be that nothing is really going on here - Will do a likelihood ratio test to see whether inclusion of first parameter added (crit3) increases model fit of standard linear regression model
+## From these results, would seem to be that nothing is really going on here - Will do a likelihood ratio test to see whether inclusion of first parameter added (int3) increases model fit of standard linear regression model
 base_mod <- lm(data_garden_inc_bmi$BMI_f7 ~ x_hypos[, "age_f7"] + x_hypos[, "male"] + x_hypos[, "white"] + 
                  x_hypos[, "lowIncome"])
 summary(base_mod)
 
 param1_mod <- lm(data_garden_inc_bmi$BMI_f7 ~ x_hypos[, "age_f7"] + x_hypos[, "male"] + x_hypos[, "white"] + 
-                   x_hypos[, "lowIncome"] + x_hypos[, "crit3"])
+                   x_hypos[, "lowIncome"] + x_hypos[, "int3"])
 summary(param1_mod)
 
 # Nope, is pretty much no association here, suggesting no association between garden access in childhood and BMI at age 7.
@@ -6653,15 +5920,13 @@ data_garden_inc_overweight <- data_garden_inc %>%
   filter(complete.cases(overweight, age_f7, male, white, lowIncome, crit1, int1))
 
 summary(data_garden_inc_overweight)
+nrow(data_garden_inc_overweight)
 
 # Save the life-course hypotheses and covariates as a matrix
 x_hypos <- data_garden_inc_overweight %>%
   select(-overweight)
 
 x_hypos <- as.matrix(x_hypos)
-
-## Remove the accumulation interaction variable (as high collinearity with critical period hypotheses)
-x_hypos <- x_hypos[,!colnames(x_hypos) %in% c("int_accum")]
 head(x_hypos)
 
 
@@ -6675,29 +5940,12 @@ mod_garden_inc_over
 # Plot these results
 plot(mod_garden_inc_over)
 
-# Look at the variables included at each step
-coef(mod_garden_inc_over, s = max(mod_garden_inc_over$lambda[mod_garden_inc_over$df == 4])); min(mod_garden_inc_over$dev.ratio[mod_garden_inc_over$df == 4])
-
-coef(mod_garden_inc_over, s = max(mod_garden_inc_over$lambda[mod_garden_inc_over$df == 5])); min(mod_garden_inc_over$dev.ratio[mod_garden_inc_over$df == 5])
-
-coef(mod_garden_inc_over, s = max(mod_garden_inc_over$lambda[mod_garden_inc_over$df == 6])); min(mod_garden_inc_over$dev.ratio[mod_garden_inc_over$df == 6])
-
-coef(mod_garden_inc_over, s = max(mod_garden_inc_over$lambda[mod_garden_inc_over$df == 8])); min(mod_garden_inc_over$dev.ratio[mod_garden_inc_over$df == 8])
-
 
 ### Visual inspection of results (although just looking at the deviance ratios there doesn't seem to be much of an effect of access to green space at all)
 
 # First, use the 'lasso-table' function defined above to pick out the changes in variables and the increment in deviance ratio
 df <- lasso_table(mod_garden_inc_over)
 df
-
-
-# Make a plot of deviance ratio by lambda value, to show the time variables were entered and the improvement in model fit. Need to be careful about scale of y-axis, as improvement in model fit may not that large.
-plot(mod_garden_inc_over$lambda, mod_garden_inc_over$dev.ratio, type = "l",
-     xlab = "Lambda value", ylab = "Deviance ratio", 
-     xlim = rev(range(mod_garden_inc_over$lambda)), ylim = c(0, max(mod_garden_inc_over$dev.ratio)))
-text(df$Lambda, 0, labels = df$Variables, srt = 90, adj = 0)
-
 
 ## Put lambda on the log scale, else differences between early models inflated, as lambda decreases on log scale. This does make the plot slightly more readable, and groups early-included variables closer together
 mod_garden_inc_over$log_lambda <- log(mod_garden_inc_over$lambda)
@@ -6706,30 +5954,30 @@ mod_garden_inc_over
 df$log_lambda <- log(as.numeric(df$Lambda))
 df
 
-# This looks better, although same issues as above re. interpreting the first variable added (doesn't mean is a strong predictor of outcome). (Have to add a bit of faff here to get y-axis to not display in scientific notation)
+# Make the plot (Have to add a bit of faff here to get y-axis to not display in scientific notation)
 plot(mod_garden_inc_over$log_lambda, mod_garden_inc_over$dev.ratio, type = "l",
      xlab = "Log lambda value", ylab = "Deviance ratio", yaxt = "n",
      xlim = rev(range(mod_garden_inc_over$log_lambda)), ylim = c(0.000, max(mod_garden_inc_over$dev.ratio)))
-axis(2, at = c(0, 0.0002, 0.0004, 0.0006, 0.0008, 0.0010, 0.0012), labels = format(c(0, 0.0002, 0.0004, 0.0006, 0.0008, 0.0010, 0.0012), scientific = FALSE))
+axis(2, at = c(0, 0.0002, 0.0004, 0.0006, 0.0008, 0.0010, 0.0012, 0.0014, 0.0016, 0.0018), labels = format(c(0, 0.0002, 0.0004, 0.0006, 0.0008, 0.0010, 0.0012, 0.0014, 0.0016, 0.0018), scientific = FALSE))
 text(df$log_lambda, 0.000, labels = df$Variables, srt = 90, adj = 0)
 
 # save this plot
-pdf(file = "LogLambdaPlot_gardenIncomeOverweight.pdf", height = 7, width = 11)
+pdf(file = "LogLambdaPlot_gardenIncomeOverweight.pdf", height = 6, width = 10)
 plot(mod_garden_inc_over$log_lambda, mod_garden_inc_over$dev.ratio, type = "l",
      xlab = "Log lambda value", ylab = "Deviance ratio", yaxt = "n",
      xlim = rev(range(mod_garden_inc_over$log_lambda)), ylim = c(0.000, max(mod_garden_inc_over$dev.ratio)))
-axis(2, at = c(0, 0.0002, 0.0004, 0.0006, 0.0008, 0.0010, 0.0012), labels = format(c(0, 0.0002, 0.0004, 0.0006, 0.0008, 0.0010, 0.0012), scientific = FALSE))
+axis(2, at = c(0, 0.0002, 0.0004, 0.0006, 0.0008, 0.0010, 0.0012, 0.0014, 0.0016, 0.0018), labels = format(c(0, 0.0002, 0.0004, 0.0006, 0.0008, 0.0010, 0.0012, 0.0014, 0.0016, 0.0018), scientific = FALSE))
 text(df$log_lambda, 0.000, labels = df$Variables, srt = 90, adj = 0)
 dev.off()
 
 
-## From these results, would seem to be that nothing is really going on here - Will do a likelihood ratio test to see whether inclusion of first parameter(s) added (green_dec12_int) increases model fit of standard logistic regression model
+## From these results, would seem to be that nothing is really going on here - Will do a likelihood ratio test to see whether inclusion of first parameter(s) added (int2) increases model fit of standard logistic regression model
 base_mod <- glm(data_garden_inc_overweight$overweight ~ x_hypos[, "age_f7"] + x_hypos[, "male"] + x_hypos[, "white"] + 
                   x_hypos[, "lowIncome"], family = "binomial")
 summary(base_mod)
 
 param1_mod <- glm(data_garden_inc_overweight$overweight ~ x_hypos[, "age_f7"] + x_hypos[, "male"] + 
-                    x_hypos[, "white"] + x_hypos[, "lowIncome"] + x_hypos[, "green_dec12_int"],
+                    x_hypos[, "white"] + x_hypos[, "lowIncome"] + x_hypos[, "int2"],
                   family = "binomial")
 summary(param1_mod)
 
@@ -6762,15 +6010,13 @@ data_garden_inc_sysBP <- data_garden_inc %>%
   filter(complete.cases(sysBP, age_f7, male, white, lowIncome, crit1, int1))
 
 summary(data_garden_inc_sysBP)
+nrow(data_garden_inc_sysBP)
 
 # Save the life-course hypotheses and covariates as a matrix
 x_hypos <- data_garden_inc_sysBP %>%
   select(-sysBP)
 
 x_hypos <- as.matrix(x_hypos)
-
-## Remove the accumulation interaction variable (as high collinearity with critical period hypotheses)
-x_hypos <- x_hypos[,!colnames(x_hypos) %in% c("int_accum")]
 head(x_hypos)
 
 
@@ -6784,29 +6030,12 @@ mod_garden_inc_sysBP
 # Plot these results
 plot(mod_garden_inc_sysBP)
 
-# Look at the variables included at each step
-coef(mod_garden_inc_sysBP, s = max(mod_garden_inc_sysBP$lambda[mod_garden_inc_sysBP$df == 4])); min(mod_garden_inc_sysBP$dev.ratio[mod_garden_inc_sysBP$df == 4])
-
-coef(mod_garden_inc_sysBP, s = max(mod_garden_inc_sysBP$lambda[mod_garden_inc_sysBP$df == 5])); min(mod_garden_inc_sysBP$dev.ratio[mod_garden_inc_sysBP$df == 5])
-
-coef(mod_garden_inc_sysBP, s = max(mod_garden_inc_sysBP$lambda[mod_garden_inc_sysBP$df == 6])); min(mod_garden_inc_sysBP$dev.ratio[mod_garden_inc_sysBP$df == 6])
-
-coef(mod_garden_inc_sysBP, s = max(mod_garden_inc_sysBP$lambda[mod_garden_inc_sysBP$df == 7])); min(mod_garden_inc_sysBP$dev.ratio[mod_garden_inc_sysBP$df == 7])
-
 
 ### Visual inspection of results (although just looking at the deviance ratios there doesn't seem to be much of an effect of access to green space at all)
 
 # First, use the 'lasso-table' function defined above to pick out the changes in variables and the increment in deviance ratio
 df <- lasso_table(mod_garden_inc_sysBP)
 df
-
-
-# Make a plot of deviance ratio by lambda value, to show the time variables were entered and the improvement in model fit. Need to be careful about scale of y-axis, as improvement in model fit may not that large.
-plot(mod_garden_inc_sysBP$lambda, mod_garden_inc_sysBP$dev.ratio, type = "l",
-     xlab = "Lambda value", ylab = "Deviance ratio", 
-     xlim = rev(range(mod_garden_inc_sysBP$lambda)), ylim = c(0, max(mod_garden_inc_sysBP$dev.ratio)))
-text(df$Lambda, 0, labels = df$Variables, srt = 90, adj = 0)
-
 
 ## Put lambda on the log scale, else differences between early models inflated, as lambda decreases on log scale. This does make the plot slightly more readable, and groups early-included variables closer together
 mod_garden_inc_sysBP$log_lambda <- log(mod_garden_inc_sysBP$lambda)
@@ -6815,14 +6044,14 @@ mod_garden_inc_sysBP
 df$log_lambda <- log(as.numeric(df$Lambda))
 df
 
-# This looks better, although same issues as above re. interpreting the first variable added (doesn't mean is a strong predictor of outcome).
+# Make the plot
 plot(mod_garden_inc_sysBP$log_lambda, mod_garden_inc_sysBP$dev.ratio, type = "l",
      xlab = "Log lambda value", ylab = "Deviance ratio", 
      xlim = rev(range(mod_garden_inc_sysBP$log_lambda)), ylim = c(0.002, max(mod_garden_inc_sysBP$dev.ratio)))
 text(df$log_lambda, 0.002, labels = df$Variables, srt = 90, adj = 0)
 
 # save this plot
-pdf(file = "LogLambdaPlot_gardenIncSysBP.pdf", height = 7, width = 11)
+pdf(file = "LogLambdaPlot_gardenIncSysBP.pdf", height = 6, width = 10)
 plot(mod_garden_inc_sysBP$log_lambda, mod_garden_inc_sysBP$dev.ratio, type = "l",
      xlab = "Log lambda value", ylab = "Deviance ratio", 
      xlim = rev(range(mod_garden_inc_sysBP$log_lambda)), ylim = c(0.002, max(mod_garden_inc_sysBP$dev.ratio)))
@@ -6868,15 +6097,13 @@ data_garden_inc_diaBP <- data_garden_inc %>%
   filter(complete.cases(diaBP, age_f7, male, white, lowIncome, crit1, int1))
 
 summary(data_garden_inc_diaBP)
+nrow(data_garden_inc_diaBP)
 
 # Save the life-course hypotheses and covariates as a matrix
 x_hypos <- data_garden_inc_diaBP %>%
   select(-diaBP)
 
 x_hypos <- as.matrix(x_hypos)
-
-## Remove the accumulation interaction variable (as high collinearity with critical period hypotheses)
-x_hypos <- x_hypos[,!colnames(x_hypos) %in% c("int_accum")]
 head(x_hypos)
 
 
@@ -6890,29 +6117,12 @@ mod_garden_inc_diaBP
 # Plot these results
 plot(mod_garden_inc_diaBP)
 
-# Look at the variables included at each step
-coef(mod_garden_inc_diaBP, s = max(mod_garden_inc_diaBP$lambda[mod_garden_inc_diaBP$df == 4])); min(mod_garden_inc_diaBP$dev.ratio[mod_garden_inc_diaBP$df == 4])
-
-coef(mod_garden_inc_diaBP, s = max(mod_garden_inc_diaBP$lambda[mod_garden_inc_diaBP$df == 6])); min(mod_garden_inc_diaBP$dev.ratio[mod_garden_inc_diaBP$df == 6])
-
-coef(mod_garden_inc_diaBP, s = max(mod_garden_inc_diaBP$lambda[mod_garden_inc_diaBP$df == 7])); min(mod_garden_inc_diaBP$dev.ratio[mod_garden_inc_diaBP$df == 7])
-
-coef(mod_garden_inc_diaBP, s = max(mod_garden_inc_diaBP$lambda[mod_garden_inc_diaBP$df == 9])); min(mod_garden_inc_diaBP$dev.ratio[mod_garden_inc_diaBP$df == 9])
-
 
 ### Visual inspection of results (although just looking at the deviance ratios there doesn't seem to be much of an effect of access to green space at all)
 
 # First, use the 'lasso-table' function defined above to pick out the changes in variables and the increment in deviance ratio
 df <- lasso_table(mod_garden_inc_diaBP)
 df
-
-
-# Make a plot of deviance ratio by lambda value, to show the time variables were entered and the improvement in model fit. Need to be careful about scale of y-axis, as improvement in model fit may not that large.
-plot(mod_garden_inc_diaBP$lambda, mod_garden_inc_diaBP$dev.ratio, type = "l",
-     xlab = "Lambda value", ylab = "Deviance ratio", 
-     xlim = rev(range(mod_garden_inc_diaBP$lambda)), ylim = c(0, max(mod_garden_inc_diaBP$dev.ratio)))
-text(df$Lambda, 0, labels = df$Variables, srt = 90, adj = 0)
-
 
 ## Put lambda on the log scale, else differences between early models inflated, as lambda decreases on log scale. This does make the plot slightly more readable, and groups early-included variables closer together
 mod_garden_inc_diaBP$log_lambda <- log(mod_garden_inc_diaBP$lambda)
@@ -6921,28 +6131,28 @@ mod_garden_inc_diaBP
 df$log_lambda <- log(as.numeric(df$Lambda))
 df
 
-# This looks better, although same issues as above re. interpreting the first variable added (doesn't mean is a strong predictor of outcome).
+# Make the plot
 plot(mod_garden_inc_diaBP$log_lambda, mod_garden_inc_diaBP$dev.ratio, type = "l",
      xlab = "Log lambda value", ylab = "Deviance ratio", 
      xlim = rev(range(mod_garden_inc_diaBP$log_lambda)), ylim = c(0, max(mod_garden_inc_diaBP$dev.ratio)))
 text(df$log_lambda, 0, labels = df$Variables, srt = 90, adj = 0)
 
 # save this plot
-pdf(file = "LogLambdaPlot_gardenIncomeDiaBP.pdf", height = 7, width = 11)
-plot(mod_garden_dep_diaBP$log_lambda, mod_garden_dep_diaBP$dev.ratio, type = "l",
+pdf(file = "LogLambdaPlot_gardenIncomeDiaBP.pdf", height = 6, width = 10)
+plot(mod_garden_inc_diaBP$log_lambda, mod_garden_inc_diaBP$dev.ratio, type = "l",
      xlab = "Log lambda value", ylab = "Deviance ratio", 
-     xlim = rev(range(mod_garden_dep_diaBP$log_lambda)), ylim = c(0, max(mod_garden_dep_diaBP$dev.ratio)))
+     xlim = rev(range(mod_garden_inc_diaBP$log_lambda)), ylim = c(0, max(mod_garden_inc_diaBP$dev.ratio)))
 text(df$log_lambda, 0, labels = df$Variables, srt = 90, adj = 0)
 dev.off()
 
 
-## From these results, would seem to be that nothing is really going on here - Will do a likelihood ratio test to see whether inclusion of first parameter(s) added (crit1 and green_inc23_int) increases model fit of standard linear regression model
+## From these results, would seem to be that nothing is really going on here - Will do a likelihood ratio test to see whether inclusion of first parameter(s) added (int_accum) increases model fit of standard linear regression model
 base_mod <- lm(data_garden_inc_diaBP$diaBP ~ x_hypos[, "age_f7"] + x_hypos[, "male"] + x_hypos[, "white"] + 
                  x_hypos[, "lowIncome"])
 summary(base_mod)
 
 param1_mod <- lm(data_garden_inc_diaBP$diaBP ~ x_hypos[, "age_f7"] + x_hypos[, "male"] + 
-                   x_hypos[, "white"] + x_hypos[, "lowIncome"] + x_hypos[, "crit1"] + x_hypos[, "green_inc23_int"])
+                   x_hypos[, "white"] + x_hypos[, "lowIncome"] + x_hypos[, "int_accum"])
 summary(param1_mod)
 
 # No association here.
