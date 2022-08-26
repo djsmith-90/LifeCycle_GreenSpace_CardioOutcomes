@@ -6,12 +6,12 @@
 
 *** Previous work has detailed a structured approach to life course modelling for both binary exposures (Smith et al., 2015: https://journals.lww.com/epidem/Fulltext/2015/09000/Model_Selection_of_the_Effect_of_Binary_Exposures.15.aspx) and continuous exposures with confounding (Smith et al., 2016: https://academic.oup.com/ije/article/45/4/1271/2951966?login=true) using LARS/lasso methods. Building on these approaches, we aim to demonstrate here how interactions can be incorporated into these models. 
 
-** However, we will not be using the LARS/covariance test method here, as: 1) there are issues with the covariance test and it is no longer recommended; and 2) Using the LARS method, it is possible to 'force' continuous confounders to be included in the model, however, this does not appear possible for binary/categorical variables (or it's not easy, at least), especially if we want to include them as interaction terms. So here we will focus on using ordinary lasso models via glmnet, rather than the LARS method. Rather than being a stepwise procedure like LARS, this approach gradually increases the lambda value and lets more variables into the model; this can make it difficult to assess when adding a new covariate does or does not improve model fit. Interpretation is therefore more subjective, based on inspection of the improvement in the deviance ratio (a measure of goodness-of-fit similar to R2).
+** However, we will not be using the LARS/covariance test method here, as: 1) there are issues with the covariance test and it is no longer recommended; and 2) Using the LARS method, it is possible to 'force' continuous confounders to be included in the model, however, this is more difficult for binary/categorical covariates and/or binary outcomes. So here we will focus on using ordinary lasso models via glmnet, rather than the LARS method. Rather than being a stepwise procedure like LARS, this approach gradually increases the lambda value and lets more variables into the model; this can make it difficult to assess when adding a new covariate does or does not improve model fit. Interpretation is therefore more subjective, based on inspection of the improvement in the deviance ratio (a measure of goodness-of-fit similar to R2).
 
 ** To interpret these results, we will focus on three approaches:
 **  - 1) Using a 'subjective' approach looking at the order in which hypotheses were entered into the model, combined with a plot of deviance/variance explained when each predictor was added, and making judgement based on these sources of information
-**  - 2) Taking each variable(s) entered in turn in the lasso model, using a likelihood ratio test to compare standard linear/logistic models with/without the next predictor in. This will provide a formal test as to whether the hypothesis predicts the outcome.
-**  - 3) Using cross-validated lasso and selecting the model within 1 SE of the best-fitting model (this method is similar to ordinary lasso, but uses k-fold cross-validation to identify the best-fitting model while minimising overfitting). Using the model within 1 SE of the best-fitting model, rather than the best-fitting model itself, should also avoid potential overfitting, leaving only variables more strongly associated with the outcome in the final model.
+**  - 2) Using a 'relaxed lasso'-type approach, where use a standard LM/GLM on the model the lasso selects at each step, then comparing model fit of all these models to detect the best-fitting model. Will use both AIC and BIC as measures of model fit.
+**  - 3) Using cross-validated lasso and selecting the model within 1 SE of the best-fitting model (this method is similar to ordinary lasso, but uses k-fold cross-validation to identify the best-fitting model while minimising overfitting). Using the model within 1 SE of the best-fitting model, rather than the best-fitting model itself, should also avoid potential overfitting, leaving only variables more strongly associated with the outcome in the final model. Will also explore model with lowest mean-squared error as well, as a comparison.
 
 ** If all these methods give a similar answer, then we can have more confidence in the conclusions drawn.
 
@@ -31,7 +31,7 @@
 ** The model/DAG we're simulating here is that SEP is a confounder, but also interacts with first green space exposure in pregnancy to impact BMI at age 7
 
 
-*** Generate the data (although note also that the simulated data here is purely to illustrate the logic and application of these structure life-course methods, and should not in any way be taken as a reflection of the real-world patterns or effect sizes of these variables)
+*** Generate the data (although note also that the simulated data here is purely to illustrate the logic and application of these structure life-course methods, and should not be taken as a reflection of the real-world patterns or effect sizes of these variables)
 
 * Sample size of ~10,000 (approximate ALSPAC participation early in study)
 clear
@@ -87,8 +87,10 @@ table high_sep green1, stat(mean bmi)
 
 * Check the 'true' model, which is SEP as confounder, interaction with green 1, and main effect of green 1. green2 and green3 should also be null. Yup, model works as expected and interaction model better fit than non-interaction model
 regress bmi high_sep green1 green2 green3
+estat ic
 est store A
 regress bmi high_sep##green1 green2 green3
+estat ic
 est store B
 
 lrtest A B
@@ -188,19 +190,25 @@ matrix res = r(table)
 matrix list res
 
 
-*** 2) Likelihood ratio tests at inclusion of each new parameter (if only one parameter is added at a time we don't really we don't need to do an LR test, as for single parameters the p-value from the model will be identical to those of the LR test, but we're doing this LR test because sometimes multiple terms get added to the lasso at one time-point)
+*** 2) Comparison of AIC and BIC over all different model combinations suggested by lasso, and select the one with the best model fit
 
-** First, compare the baseline (confounder only) model to the model including the first term added (crit1)
+** I am being a bit lazy here and not testing all of the lasso models (like in the R script), but am just showing the concepts.
 lassoknots
 
+* First, compare the baseline (confounder only) model to the model including the first term added (crit1)
 regress bmi high_sep
-est store base
+estat ic
+local mod1_aic = r(S)[1,"AIC"]
+local mod1_bic = r(S)[1,"BIC"]
 
 regress bmi high_sep crit1
-est store param1
+estat ic
+local mod2_aic = r(S)[1,"AIC"]
+local mod2_bic = r(S)[1,"BIC"]
 
 * Find strong support for more complex model which includes crit1 main effect
-lrtest base param1
+di "Model 1 AIC = " `mod1_aic' "; Model 2 AIC = " `mod2_aic'
+di "Model 1 BIC = " `mod1_bic' "; Model 2 BIC = " `mod2_bic'
 
 
 ** Next, compare the model including the next hypotheses added (int1)
@@ -208,10 +216,13 @@ est restore sim
 lassoknots
 
 regress bmi high_sep crit1 int1
-est store param2
+estat ic
+local mod3_aic = r(S)[1,"AIC"]
+local mod3_bic = r(S)[1,"BIC"]
 
 * Adding the SEP by crit1 interaction term again improves model fit
-lrtest param1 param2
+di "Model 2 AIC = " `mod2_aic' "; Model 3 AIC = " `mod3_aic'
+di "Model 2 BIC = " `mod2_bic' "; Model 3 BIC = " `mod3_bic'
 
 
 ** Does adding the next parameter (green_dec12_int) improve model fit?
@@ -219,10 +230,27 @@ est restore sim
 lassoknots
 
 regress bmi high_sep crit1 int1 green_dec23_int
-est store param3
+estat ic
+local mod4_aic = r(S)[1,"AIC"]
+local mod4_bic = r(S)[1,"BIC"]
 
-* No real improvement in model fit (as expected)
-lrtest param2 param3
+* No real improvement in model fit with BIC (as expected), but AIC shows minor improvement in model fit
+di "Model 3 AIC = " `mod3_aic' "; Model 4 AIC = " `mod4_aic'
+di "Model 3 BIC = " `mod3_bic' "; Model 4 BIC = " `mod4_bic'
+
+
+** Does adding the next parameter (green_inc23_int) improve model fit?
+est restore sim
+lassoknots
+
+regress bmi high_sep crit1 int1 green_dec23_int green_inc23_int
+estat ic
+local mod5_aic = r(S)[1,"AIC"]
+local mod5_bic = r(S)[1,"BIC"]
+
+* Now there's no improvement in AIC or BIC
+di "Model 4 AIC = " `mod4_aic' "; Model 5 AIC = " `mod5_aic'
+di "Model 4 BIC = " `mod4_bic' "; Model 5 BIC = " `mod5_bic'
 
 estimates clear
 
@@ -251,7 +279,7 @@ lassogof
 lassoinfo
 
 
-**** Summary: The methods seem match up relatively well and give broadly consistent answers, although in this example the 1SE cross-validated lasso was too conservative and did not include the 'int1' interaction term in the final model.
+**** Summary: The methods seem match up relatively well and give broadly consistent answers, although in this example the 1SE cross-validated lasso was too conservative and did not include the 'int1' interaction term in the final model, while model comparison using AIC (but not BIC) found that inclusion of an additional term beyond 'crit1' and 'int1' marginal improved model fit. The cross-validated lasso with the lowest MSE contained the two true parameters, but also included numerous additional variables as well)
 
 
 
@@ -266,9 +294,11 @@ tab overweight
 
 * Check the 'true' model, which is SEP as confounder, interaction with green 1, and main effect of green 1. green2 and green3 should also be null. Yup, model works as expected and interaction model better fit than non-interaction model
 logistic overweight high_sep green1 green2 green3
+estat ic
 est store A
 
 logistic overweight high_sep##green1 green2 green3
+estat ic
 est store B
 
 lrtest A B
@@ -309,19 +339,25 @@ lassoknots
 lassoknots, all
 
 
-*** 2) Likelihood ratio tests at inclusion of each new parameter (if only one parameter is added at a time we don't really we don't need to do an LR test, as for single parameters the p-value from the model will be identical to those of the LR test, but we're doing this LR test because sometimes multiple terms get added to the lasso at one time-point)
+*** 2) Comparison of AIC and BIC over all different model combinations suggested by lasso, and select the one with the best model fit
 
-** First, compare the baseline (confounder only) model to the model including the first term added (crit1)
+** As above, I am being a bit lazy here and not testing all of the lasso models (like in the R script), but am just showing the concepts.
 lassoknots
 
+** First, compare the baseline (confounder only) model to the model including the first term added (crit1)
 logistic overweight high_sep
-est store base
+estat ic
+local mod1_aic = r(S)[1,"AIC"]
+local mod1_bic = r(S)[1,"BIC"]
 
 logistic overweight high_sep crit1
-est store param1
+estat ic
+local mod2_aic = r(S)[1,"AIC"]
+local mod2_bic = r(S)[1,"BIC"]
 
 * Find strong support for more complex model which includes crit1 main effect
-lrtest base param1
+di "Model 1 AIC = " `mod1_aic' "; Model 2 AIC = " `mod2_aic'
+di "Model 1 BIC = " `mod1_bic' "; Model 2 BIC = " `mod2_bic'
 
 
 ** Next, compare the model including the next hypotheses added (int1)
@@ -329,23 +365,30 @@ est restore sim
 lassoknots
 
 logistic overweight high_sep crit1 int1
-est store param2
+estat ic
+local mod3_aic = r(S)[1,"AIC"]
+local mod3_bic = r(S)[1,"BIC"]
 
-* Adding the SEP by crit1 interaction term term again improves model fit
-lrtest param1 param2
+* Adding the SEP by crit1 interaction term again improves model fit
+di "Model 2 AIC = " `mod2_aic' "; Model 3 AIC = " `mod3_aic'
+di "Model 2 BIC = " `mod2_bic' "; Model 3 BIC = " `mod3_bic'
 
 
-** Does adding the next parameters (green_dec12_int) improve model fit?
+** Does adding the next parameter (green_dec12_int) improve model fit?
 est restore sim
 lassoknots
 
 logistic overweight high_sep crit1 int1 green_dec12_int
-est store param3
+estat ic
+local mod4_aic = r(S)[1,"AIC"]
+local mod4_bic = r(S)[1,"BIC"]
 
-* No improvement in model fit
-lrtest param2 param3
+* No real improvement in model fit with either AIC or BIC (as expected)
+di "Model 3 AIC = " `mod3_aic' "; Model 4 AIC = " `mod4_aic'
+di "Model 3 BIC = " `mod3_bic' "; Model 4 BIC = " `mod4_bic'
 
 estimates clear
+
 
 
 *** 3) Cross-validated lasso to find 'optimal' model for out-of-sample prediction. Will compare both 'optimal' and '1 SE' models, although the 1 SE model is probably better to avoid overfitting as it selects the best model within 1 SE of the 'optimal' model. Will use the default number of k-folds (10).
@@ -365,14 +408,13 @@ cvplot
 ** Now for 'optimal' lambda value based on cross-validation function (CV mean prediction error)
 lasso logit overweight (high_sep) crit1-green_dec23_int, selection(cv, folds(10)) rseed(3932)
 
-* Display results - This method includes 7 variables in addition to high_sep and crit1, so is somewhat too liberal and also does not specify the correct model
+* Display results - This method includes 4 variables in addition to crit1 and int1, so is somewhat too liberal and also does not specify the correct model
 lassoknots
 lassocoef, display(coef, penalized eform) nolegend
 lassogof
 lassoinfo
 
 
-**** Summary: When using a binary outcome, the methods give slightly less consistent answers compared to when using continuous outcomes, and do not always identify the true model (likely due to power issues when using binary outcomes; see for formal simulation study results for a more detailed exploration). For instance, the visual inspection and likelihood ratio test methods both included the correct variables 'crit1' and 'int1', while the 1SE cross-validated lasso model only identified the 'crit1' term in the final model; interpretation therefore should be made on a qualitative judgement taking information from all these methods into consideration, rather than just one.
-
+**** Summary: When using a binary outcome, the methods give slightly less consistent answers compared to when using continuous outcomes, and do not always identify the true model (likely due to power issues when using binary outcomes; see for formal simulation study results for a more detailed exploration). For instance, the visual inspection and likelihood ratio test methods both included the correct variables 'crit1' and 'int1', while the 1SE cross-validated lasso model only identified the 'crit1' term in the final model; interpretation therefore should be made on a qualitative judgement taking information from all these methods into consideration, rather than just one. As with the continuous outcome, the cross-validated lasso with the lowest MSE selects too many variables.
 
 
