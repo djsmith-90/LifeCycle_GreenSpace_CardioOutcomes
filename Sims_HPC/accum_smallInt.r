@@ -8,9 +8,9 @@
 #   - Exposures: Binary (access to green space; yes/no) vs continuous (distance to green space), and centered vs uncentered. Also want to vary the correlation between exposures to see how collinearity impacts the power of the lasso to detect the true model
 #   - Outcome: Binary (overweight/obese) vs continuous (BMI)
 
-## For these simulations, will use the same set-up as in the example simulation script, with 'access to green space' as the exposure measured at three time points, cardiometabolic health as the outcome (BMI/obesity), and SEP as a confounder/interaction term. SEP causes access to green space and the outcome (lower BMI/obesity if higher SEP), while the interaction between SEP and the first green space time-point also causes the outcome.
+## For these simulations, will use the same set-up as in the example simulation script, with 'access to green space' as the exposure measured at three time points, cardiometabolic health as the outcome (BMI/obesity), and SEP as a confounder/interaction term. SEP causes access to green space and the outcome (lower BMI/obesity if higher SEP), while the interaction between SEP and the most recent green space time-point also causes the outcome.
 
-## In addition to this scenario, we will also vary the strength of the interaction term, to explore how this impacts the power to detect the interaction, as well as varying the specific life course interaction (i.e., the main model will explore an interaction with the first critical period, while other simulations will examine interactions with accumulation and change, to see whether this impacts conclusions).
+## In addition to this scenario, we will also vary the strength of the interaction term, to explore how this impacts the power to detect the interaction, as well as varying the specific life course interaction (i.e., the main model will explore an interaction with the most recent critical period, while other simulations will examine interactions with accumulation and change, to see whether this impacts conclusions).
 
 
 ### This script is for: BMI caused by accumulation and interaction with this and SEP (interaction size = small [0.33 for binary exposures; 0.01 for continuous exposures])
@@ -482,7 +482,7 @@ lasso_sim <- function(n_sims = 1000, sampleSize = 1000, Exposure = "Binary", Cen
 
 ## Next, the number of simulations per combination of parameters (1,000), the target hypotheses we simulated are the true model, and set up a data frame to store the results in
 n_sims <- 1000
-set.seed(21876)
+set.seed(7161698)
 
 target_covars <- c("high_sep", "accumulation", "int_accum")
 

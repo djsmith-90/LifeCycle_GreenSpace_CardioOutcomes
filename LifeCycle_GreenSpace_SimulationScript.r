@@ -6,7 +6,7 @@
 
 ### Previous work has detailed a structured approach to life course modelling for both binary exposures (Smith et al., 2015: https://journals.lww.com/epidem/Fulltext/2015/09000/Model_Selection_of_the_Effect_of_Binary_Exposures.15.aspx) and continuous exposures with confounding (Smith et al., 2016: https://academic.oup.com/ije/article/45/4/1271/2951966?login=true) using LARS/lasso methods. Building on these approaches, we aim to demonstrate here how interactions can be incorporated into these models. 
 
-## However, we will not be using the LARS/covariance test method here, as: 1) there are issues with the covariance test and it is no longer recommended; and 2) Using the LARS method, it is possible to 'force' continuous confounders to be included in the model, however, this is more difficult for binary/categorical covariates and/or binary outcomes. So here we will focus on using ordinary lasso models via glmnet, rather than the LARS method. Rather than being a stepwise procedure like LARS, this approach gradually increases the lambda value and lets more variables into the model; this can make it difficult to assess when adding a new covariate does or does not improve model fit. Interpretation is therefore more subjective, based on inspection of the improvement in the deviance ratio (a measure of goodness-of-fit similar to R2).
+## However, we will not be using the LARS/covariance test method here, as: 1) there are issues with the covariance test and it is no longer recommended; and 2) Using the LARS method, it is possible to 'force' continuous confounders to be included in the model, however, this is more difficult for binary/categorical binary outcomes. So here we will focus on using ordinary lasso models via glmnet, rather than the LARS method. Rather than being a stepwise procedure like LARS, this approach gradually increases the lambda value and lets more variables into the model; this can make it difficult to assess when adding a new covariate does or does not improve model fit. Interpretation is therefore more subjective, based on inspection of the improvement in the deviance ratio (a measure of goodness-of-fit similar to R2).
 
 ## To interpret these results, we will focus on three approaches:
 ##  - 1) Using a 'subjective' approach looking at the order in which hypotheses were entered into the model, combined with a plot of deviance/variance explained when each predictor was added, and making judgement based on these sources of information
@@ -46,23 +46,23 @@ setwd("C:\\Users\\ds16565\\OneDrive - University of Bristol\\MyFiles-Migrated\\D
 ## Confounder/interaction term: Socioeconomic position (0 = low; 1 = high)
 ## Outcome: BMI age 7 (continuous)
 
-## Hypothetical DAG - The model here is that SEP is a confounder, but also interacts with first green space exposure in pregnancy to impact BMI at age 7
+## Hypothetical DAG - The model here is that SEP is a confounder, but also interacts with most recent green space exposure to impact BMI at age 7
 dag <- dagitty('dag {
                 SEP [pos = "0,0"]
                 Green1 [pos = "1,1"]
                 Green2 [pos = "1,1.5"]
                 Green3 [pos = "1,2"]
                 BMI [pos = "2,0"]
-                SEP_Green1_int [pos = "1.25,0.25"]
+                SEP_Green3_int [pos = "1.33,0.5"]
                 
                 SEP -> Green1
                 SEP -> Green2
                 SEP -> Green3
                 SEP -> BMI
-                SEP -> SEP_Green1_int
-                Green1 -> SEP_Green1_int
-                Green1 -> BMI
-                SEP_Green1_int -> BMI
+                SEP -> SEP_Green3_int
+                Green3 -> SEP_Green3_int
+                Green3 -> BMI
+                SEP_Green3_int -> BMI
                 Green1 -> Green2
                 Green2 -> Green3
                 }')
@@ -77,7 +77,7 @@ dev.off()
 ### Generate the data (although note also that the simulated data here is purely to illustrate the logic and application of these structure life-course methods, and should not be taken as a reflection of the real-world patterns or effect sizes of these variables)
 
 # Sample size of ~10,000 (approximate ALSPAC participation early in study)
-set.seed(4321)
+set.seed(1234)
 n <- 10000
 
 # SEP - Not caused by anything, so just do 50/50 split (1 = high SEP)
@@ -123,23 +123,23 @@ table(green2, green3)
 rm(green3_logit)
 rm(green3_p)
 
-# Now for continuous BMI outcome - Caused by SEP (higher SEP = lower BMI), plus interaction with green1 (lower SEP and access to green space = lower BMI compared to lower SEP and no access to green space). Assuming no effect of green1 here if high SEP.
-bmi <- 25 + (-4 * high_sep) + (-2 * green1) + (2 * high_sep * green1) + rnorm(n, 0, 3)
+# Now for continuous BMI outcome - Caused by SEP (higher SEP = lower BMI), plus interaction with green3 (lower SEP and access to green space = lower BMI compared to lower SEP and no access to green space). Assuming no main effect of green3 here if high SEP.
+bmi <- 25 + (-4 * high_sep) + (-2 * green3) + (2 * high_sep * green3) + rnorm(n, 0, 3)
 summary(bmi)
 
 ## descriptive stats split by possible combinations of SEP and green1 to check simulation worked
-summary(bmi[high_sep == 1 & green1 == 1]) # High SEP and access to green space in preg - Lowest BMI
-summary(bmi[high_sep == 1 & green1 == 0]) # High SEP and no access to green space in preg - Lowest BMI
-summary(bmi[high_sep == 0 & green1 == 1]) # Low SEP and access to green space in preg - Middle BMI
-summary(bmi[high_sep == 0 & green1 == 0]) # Low SEP and no access to green space in preg - Highest BMI
+summary(bmi[high_sep == 1 & green3 == 1]) # High SEP and recent access to green space - Lowest BMI
+summary(bmi[high_sep == 1 & green3 == 0]) # High SEP and no recent access to green space - Lowest BMI
+summary(bmi[high_sep == 0 & green3 == 1]) # Low SEP and recent access to green space - Middle BMI
+summary(bmi[high_sep == 0 & green3 == 0]) # Low SEP and no recent access to green space - Highest BMI
 
-# Check the 'true' model, which is SEP as confounder, interaction with green 1, and main effect of green 1. green2 and green3 should also be null. Yup, model works as expected and interaction model better fit than non-interaction model
+# Check the 'true' model, which is SEP as confounder, interaction with green 3, and main effect of green 3. green1 and green2 should also be null. Yup, model works as expected and interaction model better fit than non-interaction model
 summary(lm(bmi ~ high_sep + green1 + green2 + green3))
-summary(lm(bmi ~ high_sep + green1 + green2 + green3 + high_sep*green1))
-anova(lm(bmi ~ high_sep + green1 + green2 + green3), lm(bmi ~ high_sep + green1 + green2 + green3 + high_sep*green1))
+summary(lm(bmi ~ high_sep + green1 + green2 + green3 + high_sep*green3))
+anova(lm(bmi ~ high_sep + green1 + green2 + green3), lm(bmi ~ high_sep + green1 + green2 + green3 + high_sep*green3))
 
-AIC(lm(bmi ~ high_sep + green1 + green2 + green3)); AIC(lm(bmi ~ high_sep + green1 + green2 + green3 + high_sep*green1))
-BIC(lm(bmi ~ high_sep + green1 + green2 + green3)); BIC(lm(bmi ~ high_sep + green1 + green2 + green3 + high_sep*green1))
+AIC(lm(bmi ~ high_sep + green1 + green2 + green3)); AIC(lm(bmi ~ high_sep + green1 + green2 + green3 + high_sep*green3))
+BIC(lm(bmi ~ high_sep + green1 + green2 + green3)); BIC(lm(bmi ~ high_sep + green1 + green2 + green3 + high_sep*green3))
 
 
 ### Encode the life course hypotheses
@@ -223,7 +223,7 @@ coef(mod, s = max(mod$lambda[mod$df == 3])); min(mod$dev.ratio[mod$df == 3])
 coef(mod, s = max(mod$lambda[mod$df == 4])); min(mod$dev.ratio[mod$df == 4])
 coef(mod, s = max(mod$lambda[mod$df == 5])); min(mod$dev.ratio[mod$df == 5])
 
-# The first variable included was green1, and then the second variable included was the interaction term between SEP and green1, which is correct, as this is how we coded the data.
+# The first variable included was green3, and then the second variable included was the interaction term between SEP and green3, which is correct, as this is how we coded the data.
 
 
 #### Will explore a few methods to check whether we get the right result and do not include any other incorrect parameters in the 'best' model
@@ -322,7 +322,7 @@ mod
 df$log_lambda <- log(as.numeric(df$Lambda))
 df
 
-# This looks better, as now much clearer that 'crit1' and 'int1' were entered first. However, one potentially misleading aspect is that lasso works by initialising the lambda value just above the threshold where no variables are entered (excluding covariates restrained to be in the model). This means that there will always be a 'first' variable entered early in the model, making it seem like this is the best fit to the data. However, because there always *has* to be one variable entered first, it doesn't mean that this is actually predictive of the outcome. So to interpret this we need to look at the deviance ratio. Here, once 'crit1' is added the deviance ratio increases by about 1.5%, after which 'int1' is added, and the deviance ratio increases by around another 2% until the next variable is entered in the model (green_inc12_int), after which the deviance ratio does not increase at all. This suggests that 'crit1' and 'int1' in combination explain most of the variation in the outcome BMI attributable to the life-course hypotheses, and that these variables are associated with the outcome (again, just as we simulated).
+# This looks better, as now much clearer that 'crit3' and 'int3' were entered first. However, one potentially misleading aspect is that lasso works by initialising the lambda value just above the threshold where no variables are entered (excluding covariates restrained to be in the model). This means that there will always be a 'first' variable entered early in the model, making it seem like this is the best fit to the data. However, because there always *has* to be one variable entered first, it doesn't mean that this is actually predictive of the outcome. So to interpret this we need to look at the deviance ratio. Here, once 'crit3' is added the deviance ratio increases by about 1.5%, after which 'int3' is added, and the deviance ratio increases by around another 1.5% until the next variable is entered in the model (green_dec23_int), after which the deviance ratio barely increases at all. This suggests that 'crit3' and 'int3' in combination explain most of the variation in the outcome BMI attributable to the life-course hypotheses, and that these variables are associated with the outcome (again, just as we simulated).
 plot(mod$log_lambda, mod$dev.ratio, type = "l",
      xlab = "Log lambda value", ylab = "Deviance ratio", 
      xlim = rev(range(mod$log_lambda)), ylim = c(0.2, max(mod$dev.ratio)))
@@ -440,13 +440,14 @@ df$model_vars[which.min(df$aic)]
 df$model_vars[which.min(df$bic)]
 
 
-### The best-fitting model, according to both AIC and BIC, is the true model - i.e., that with 'high_sep' as default, plus 'crit1' and 'int1'
+### The best-fitting model, according to both AIC and BIC, is the true model - i.e., that with 'high_sep' as default, plus 'crit3' and 'int3'
 
 
 ## Run selective inference on the best-fitting lasso model (this is the same for both AIC and BIC)
 
 # select the chosen lambda value
 lambda <- as.numeric(df$Lambda[which.min(df$aic)])
+lambda
 
 # Extract the coefficients (have to exclude the intercept)
 beta <- coef(mod, s = lambda, x = x_hypos, y = bmi, 
@@ -464,23 +465,26 @@ colnames(si_res) <- c("Variable", "Beta", "SE", "Pvalue", "CI.lo", "CI.up")
 si_res[,-1] <- lapply(si_res[,-1], function(x) round(as.numeric(as.character(x)), 4))
 si_res
 
-## And compare against standard regression results - Results are practically identical, but p-values and CIs are slightly wider/corrected in the selective inference method as this accounts for the multiple comparisons. Another benefit of the glmnet method is that we get to see the confounder/covariate results (which are partialled-out/implicitly adjusted for when using LARS and the FWL method).
-summary(lm(bmi ~ high_sep + crit1 + high_sep:crit1))
-confint(lm(bmi ~ high_sep + crit1 + high_sep:crit1))
+## And compare against standard regression results - Results are practically identical, but p-values and CIs are usually slightly wider/corrected in the selective inference method as this accounts for the multiple comparisons (although here they are practically identical). Another benefit of the glmnet method is that we get to see the confounder/covariate results (which are partialled-out/implicitly adjusted for when using LARS and the FWL method).
+summary(lm(bmi ~ high_sep + crit3 + high_sep:crit3))
+confint(lm(bmi ~ high_sep + crit3 + high_sep:crit3))
 
 
-### One benefit of this approach over LARS and the FWL method (in addition to being easier to implement and the regression parameters being on the original scale), is that it is possible to edit the penalty factor when running selective inference, so if a variable does not appear in the final lasso model we can constrain it to be in the reported model - particularly handy if lasso selects an interaction term but not a main effect, but we want to report a main effect in the reported model. This functionality is not possible with LARs and the FWL method, I don't think, as the confounders/covariates are fixed throughout the process.
+### One benefit of this approach over LARS and the FWL method (in addition to being easier to implement and the regression parameters being on the original scale), is that it is possible to edit the penalty factor when running selective inference, so if a variable does not appear in the final lasso model we can constrain it to be in the reported model - particularly handy if lasso selects an interaction term but not a main effect, but we want to report a main effect in the reported model. This functionality is not possible with LARs and the FWL method, as the confounders/covariates are fixed throughout the process.
 
-## Here's an example - Say our best-fitting model from the lasso algorithm was the fourth model, with high_sep, crit1, int1 and green_inc12_int. In this example, we may want to force the 'green_inc12' main effect into the final model.
+## Here's an example - Say our best-fitting model from the lasso algorithm was the fourth model, with high_sep, crit3, int3 and green_dec23_int. In this example, we may want to force the 'green_dec23' main effect into the final model.
+df
 
-# select the chosen lambda value
+# select the chosen lambda value (Note: Sometimes the behaviour of this selective inference package is quite strange, as have to specify the lambda value manually to get the script to work - More on this below.)
 lambda <- as.numeric(df$Lambda[df$VarNum == 4])
+lambda
+lambda <- 0.08160667
 
-# Extract the coefficients (have to exclude the intercept) - Here we edit the penalty term here so that 'green_inc12' (the 10th variable in x_hypos) is forced into the model
+# Extract the coefficients (have to exclude the intercept) - Here we edit the penalty term here so that 'green_dec23' (the 16th variable in x_hypos) is forced into the model (also have to force 'green_dec23_int' into the model here as well).
 beta <- coef(mod, s = lambda, x = x_hypos, y = bmi, 
-             penalty.factor = (c(0, rep(1, 8), 0, rep(1, 7))), exact = TRUE)[-1]
+             penalty.factor = (c(0, rep(1, 14), 0, 0)), exact = TRUE)[-1]
 
-# Perform selective inference
+# Perform selective inference. Note: There are severe issues with model fit here, any there are lots of warning messages from the 'fixedLassoInf' command, and the confidence intervals contain infinite values. Some obvious issues with estimation here, likely because the 'green_dec23' variables have no association with the outcome.
 si_res <- fixedLassoInf(x_hypos, bmi, beta, lambda, alpha = 0.05)
 si_res
 si_res$vars
@@ -492,6 +496,10 @@ colnames(si_res) <- c("Variable", "Beta", "SE", "Pvalue", "CI.lo", "CI.up")
 si_res[,-1] <- lapply(si_res[,-1], function(x) round(as.numeric(as.character(x)), 4))
 si_res
 
+## And compare against standard regression results (although impossible to really compare as no CIs or p-values for selective inference results. Still, does appear that none of the extra variables, other than high_sep, crit3 and int3 are associated with the outcome)
+summary(lm(bmi ~ high_sep + crit3 + high_sep:crit3 + green_dec23 + green_dec23_int))
+confint(lm(bmi ~ high_sep + crit3 + high_sep:crit3 + green_dec23 + green_dec23_int))
+
 
 
 ### 3) Cross-validated lasso to find 'optimal' model for out-of-sample prediction. Will compare both 'optimal' and '1 SE' models, although the 1 SE model is probably better to avoid overfitting as it selects the best model within 1 SE of the 'optimal' model (i.e., lowest MSE). Will use the default number of k-folds (10).
@@ -501,10 +509,10 @@ mod.cv
 
 plot(mod.cv) # Plot the log lambda by MSE to show both 'optimal' and '1SE' models (number of parameters runs along the top of the plot)
 
-# The 1SE model contains 3 parameters (SEP confounder, crit1 and int1 term), so identifies the correct model
+# The 1SE model contains 3 parameters (SEP confounder, crit3 and int3 term), so identifies the correct model
 coef(mod.cv, s = mod.cv$lambda.1se)
 
-# The model with the lowest MSE contains 7 parameters, so does not correct identify the correct model (but as this optimal lasso is mainly for prediction, this increase in complexity is to be expected as the model hooks on to random noise in the data) - It does contain the two 'true' parameters - 'crit1' and 'int1' - however.
+# The model with the lowest MSE contains 12 parameters, so does not correct identify the correct model (but as this optimal lasso is mainly for prediction, this increase in complexity is to be expected as the model hooks on to random noise in the data) - It does contain the two 'true' parameters - 'crit3' and 'int3' - however.
 coef(mod.cv, s = mod.cv$lambda.min)
 
 # Save this plot
@@ -518,6 +526,7 @@ dev.off()
 ## Minimum MSE/prediction error model first
 # select the chosen lambda value
 lambda <- mod.cv$lambda.min
+lambda
 
 # Extract the coefficients (have to exclude the intercept)
 beta <- coef(mod.cv, s = lambda, x = x_hypos, y = bmi, 
@@ -532,14 +541,14 @@ beta <- coef(mod.cv, s = lambda, x = x_hypos, y = bmi, exact = TRUE)[-1]
 
 # Manually assigning the lambda value - Now get an error message, and have to add back in the penalty.factor argument to get it to work. Very strange! To be on the safe side, it's probably best to assign lambda manually.
 lambda
-lambda <- 0.01241
+lambda <- 0.004157
 beta <- coef(mod.cv, s = lambda, x = x_hypos, y = bmi, exact = TRUE)[-1]
 
 beta <- coef(mod.cv, s = lambda, x = x_hypos, y = bmi, 
              penalty.factor = (c(0, rep(1, ncol(x_hypos) - 1))), exact = TRUE)[-1]
 
 
-# Perform selective inference - There are some warnings here, and the p-values and confidence intervals have not been estimated (possibly because the model is too complex with 7 parameters?). Error is: "In TG.limits(y, A, b, vj, Sigma = diag(rep(sigma^2, n))): Constraint not satisfied. A %*% Z should be elementwise less than or equal to b"
+# Perform selective inference - There are some warnings here, and the p-values and confidence intervals have not been estimated (possibly because the model is too complex with 12 parameters). Error is: "In TG.limits(y, A, b, vj, Sigma = diag(rep(sigma^2, n))): Constraint not satisfied. A %*% Z should be elementwise less than or equal to b"
 si_res_CV_minMSE <- fixedLassoInf(x_hypos, bmi, beta, lambda, alpha = 0.05)
 si_res_CV_minMSE
 si_res_CV_minMSE$vars
@@ -552,21 +561,23 @@ colnames(si_res_CV_minMSE) <- c("Variable", "Beta", "SE", "Pvalue", "CI.lo", "CI
 si_res_CV_minMSE[,-1] <- lapply(si_res_CV_minMSE[,-1], function(x) round(as.numeric(as.character(x)), 4))
 si_res_CV_minMSE
 
-## And compare against standard regression results (although impossible to really compare as no CIs or p-values for selective inference results. Still, does appear that none of the extra variables, other than high_sep, crit1 and int1 are associated with the outcome)
-summary(lm(bmi ~ high_sep + crit1 + high_sep:crit1 + accumulation + green_inc12_int + green_inc23 + green_dec23_int))
-confint(lm(bmi ~ high_sep + crit1 + high_sep:crit1 + accumulation + green_inc12_int + green_inc23 + green_dec23_int))
+## And compare against standard regression results (although impossible to really compare as no CIs or p-values for selective inference results. Still, does appear that none of the extra variables, other than high_sep, crit3 and int3 are associated with the outcome)
+summary(lm(bmi ~ high_sep + crit3 + high_sep:crit3 + int1 + crit2 + green_inc12 + green_dec12 + green_dec12_int +
+             green_inc23 + green_inc23_int + green_dec23))
+confint(lm(bmi ~ high_sep + crit3 + high_sep:crit3 + int1 + crit2 + green_inc12 + green_dec12 + green_dec12_int +
+             green_inc23 + green_inc23_int + green_dec23))
 
 
 ## Now the model within 1 SE of the minimum MSE model
 # select the chosen lambda value
 (lambda <- mod.cv$lambda.1se)
-lambda <- 0.11574
+lambda <- 0.0983
 
 # Extract the coefficients (have to exclude the intercept)
 beta <- coef(mod.cv, s = lambda, x = x_hypos, y = bmi, 
              penalty.factor = (c(0, rep(1, ncol(x_hypos) - 1))), exact = TRUE)[-1]
 
-# Perform selective inference - As this model identified crit1 and int1, this model is the same as that reported above for AIC/BIC
+# Perform selective inference - As this model identified crit3 and int3, this model is the same as that reported above for AIC/BIC
 si_res_CV_1SE <- fixedLassoInf(x_hypos, bmi, beta, lambda, alpha = 0.05)
 si_res_CV_1SE
 si_res_CV_1SE$vars
@@ -646,10 +657,10 @@ plot(c(0, variables), lars$R2, type='l', # lars$R2 - elbow plots model R2 value
 text(c(0, variables), rep(0, max(variables)+1),
      labels=c("", additions), srt=90, adj=0)
 
-## Some of the encoded variables are repeated twice in the plot (as included, then dropped, then re-included again), but results do point to the same picture as with the glmnet/lasso approach above, as R2 increases when the first two variables are added - crit1 and int1 - after which there is no noticeable improvement.
+## Some of the encoded variables are repeated twice in the plot (as included, then dropped, then re-included again), but results do point to the same picture as with the glmnet/lasso approach above, as R2 increases when the first two variables are added - crit3 and int3 - after which there is no noticeable improvement.
 
 
-## sI - post-selection inference method
+## Post-selection inference
 
 # Need to take the sum of squares and re-normalise the results, so they are on the original scale (as currently are using residuals via the FWL method)
 sumsq <- lars$normx
@@ -675,9 +686,9 @@ colnames(fli.res) <- c("Variable", "Beta", "SE", "Pvalue", "CI.lo", "CI.up")
 fli.res[,-1] <- lapply(fli.res[,-1], function(x) round(as.numeric(as.character(x)), 4))
 fli.res
 
-# And compare against standard regression results - Results are practically identical, but p-values and CIs are slightly wider/corrected in the selective inference method as this accounts for the multiple comparisons. Another benefit of the glmnet method is that we get to see the confounder/covariate results (which are 'partialled-out'/implicitly conditioned on when using LARS and the FWL method).
-summary(lm(bmi ~ high_sep + crit1 + high_sep:crit1))
-confint(lm(bmi ~ high_sep + crit1 + high_sep:crit1))
+# And compare against standard regression results - Results are practically identical, but p-values and CIs are usually slightly wider/corrected in the selective inference method as this accounts for the multiple comparisons. Another benefit of the glmnet method is that we get to see the confounder/covariate results (which are 'partialled-out'/implicitly conditioned on when using LARS and the FWL method).
+summary(lm(bmi ~ high_sep + crit3 + high_sep:crit3))
+confint(lm(bmi ~ high_sep + crit3 + high_sep:crit3))
 
 
 
@@ -690,15 +701,15 @@ confint(lm(bmi ~ high_sep + crit1 + high_sep:crit1))
 overweight <- ifelse(bmi > 25, 1, 0)
 table(overweight)
 
-# Check the 'true' model, which is SEP as confounder, interaction with green 1, and main effect of green 1. green2 and green3 should also be null. Yup, model works as expected and interaction model better fit than non-interaction model
+# Check the 'true' model, which is SEP as confounder, interaction with green 3, and main effect of green 3. green1 and green2 should also be null. Yup, model works as expected and interaction model better fit than non-interaction model
 summary(glm(overweight ~ high_sep + green1 + green2 + green3, family = "binomial"))
-summary(glm(overweight ~ high_sep + green1 + green2 + green3 + high_sep*green1, family = "binomial"))
-exp(cbind(coef(summary(glm(overweight ~ high_sep + green1 + green2 + green3 + high_sep*green1, family = "binomial")))[, 1], confint(glm(overweight ~ high_sep + green1 + green2 + green3 + high_sep*green1, family = "binomial"))))
+summary(glm(overweight ~ high_sep + green1 + green2 + green3 + high_sep*green3, family = "binomial"))
+exp(cbind(coef(summary(glm(overweight ~ high_sep + green1 + green2 + green3 + high_sep*green3, family = "binomial")))[, 1], confint(glm(overweight ~ high_sep + green1 + green2 + green3 + high_sep*green3, family = "binomial"))))
 anova(glm(overweight ~ high_sep + green1 + green2 + green3, family = "binomial"), 
-      glm(overweight ~ high_sep + green1 + green2 + green3 + high_sep*green1, family = "binomial"), test = "Chisq")
+      glm(overweight ~ high_sep + green1 + green2 + green3 + high_sep*green3, family = "binomial"), test = "Chisq")
 
-AIC(glm(overweight ~ high_sep + green1 + green2 + green3, family = "binomial")); AIC(glm(overweight ~ high_sep + green1 + green2 + green3 + high_sep*green1, family = "binomial"))
-BIC(glm(overweight ~ high_sep + green1 + green2 + green3, family = "binomial")); BIC(glm(overweight ~ high_sep + green1 + green2 + green3 + high_sep*green1, family = "binomial"))
+AIC(glm(overweight ~ high_sep + green1 + green2 + green3, family = "binomial")); AIC(glm(overweight ~ high_sep + green1 + green2 + green3 + high_sep*green3, family = "binomial"))
+BIC(glm(overweight ~ high_sep + green1 + green2 + green3, family = "binomial")); BIC(glm(overweight ~ high_sep + green1 + green2 + green3 + high_sep*green3, family = "binomial"))
 
 
 
@@ -718,11 +729,11 @@ plot(mod.binary)
 # Look at the variables included at each step (first model is the baseline SEP-only model)
 coef(mod.binary, s = max(mod.binary$lambda[mod.binary$df == 1])); min(mod.binary$dev.ratio[mod.binary$df == 1])
 coef(mod.binary, s = max(mod.binary$lambda[mod.binary$df == 2])); min(mod.binary$dev.ratio[mod.binary$df == 2])
-#coef(mod.binary, s = max(mod.binary$lambda[mod.binary$df == 3])); min(mod.binary$dev.ratio[mod.binary$df == 3])
+coef(mod.binary, s = max(mod.binary$lambda[mod.binary$df == 3])); min(mod.binary$dev.ratio[mod.binary$df == 3])
 coef(mod.binary, s = max(mod.binary$lambda[mod.binary$df == 4])); min(mod.binary$dev.ratio[mod.binary$df == 4])
 coef(mod.binary, s = max(mod.binary$lambda[mod.binary$df == 5])); min(mod.binary$dev.ratio[mod.binary$df == 5])
 
-# The first variable included was green1, and then the second variables included were the interaction term between SEP and green1 (which is correct), but also the 'green_inc12_int' term, which is incorrect, meaning that this method does not appear to have identified the true model. This is likely because we are using a binary outcome, which reduces the power of the analysis to detect the correct model (see the more formal simulation study for additional details and verification)
+# The first variable included was green3, and then the second variable was 'green_inc23', while the third variable included was int3'. As 'green_inc23' does not cause the outcome, this is incorrect, meaning that this method does not appear to have identified the true model. This is likely because we are using a binary outcome, which reduces the power of the analysis to detect the correct model (see the more formal simulation study for additional details and verification).
 
 
 #### Will explore a few methods to check whether we get the right result and do not include any other incorrect parameters in the 'best' model
@@ -821,7 +832,7 @@ mod
 df$log_lambda <- log(as.numeric(df$Lambda))
 df
 
-# This looks better, as now clearer that 'crit1' was entered first, followed by 'int1' and 'green_inc12_int' (the latter is which is incorrect, as the true model should just contain 'crit1' and 'int1'). As also need to be aware of the deviance ratio scale (as mentioned above). Here, once 'crit1' is added the deviance ratio increases a little (~1.5%), after which 'int1' and 'green_inc12_int' are added, and the deviance ratio increases by around another ~0.3% until the next variable is entered in the model (green_dec23_int), after which the deviance ratio does not increase by very much. This suggests that 'crit1', 'int1' and 'green_inc12_int' in combination explain most of the variation in the outcome BMI attributable to the life-course hypotheses, and that these variables are associated with the outcome. However, unlike with the continuous outcome example above, the deviance ratios/variance explained by these variables is quite a bit weaker here with this binary outcome, and the model does not identify the true combination of parameters that we simulated.
+# This looks better, as now clearer that 'crit3' was entered first, followed by 'green_inc23' and then 'int3' shortly after. Also need to be aware of the deviance ratio scale (as mentioned above). Here, once 'crit3' is added the deviance ratio increases a little (~1.5%), after which 'green_inc23' and 'int3' are added, and the deviance ratio increases by around another ~0.5% until the next variable is entered in the model (green_dec12), after which the deviance ratio does not increase by very much. This suggests that 'crit3', 'int3' and 'green_inc23' in combination explain most of the variation in the outcome BMI attributable to the life-course hypotheses, and that these variables are associated with the outcome. However, unlike with the continuous outcome example above, the deviance ratios/variance explained by these variables is quite a bit weaker here with this binary outcome, and the model does not identify the true combination of parameters that we simulated.
 plot(mod.binary$log_lambda, mod.binary$dev.ratio, type = "l",
      xlab = "Log lambda value", ylab = "Deviance ratio", 
      xlim = rev(range(mod.binary$log_lambda)), ylim = c(0.1, max(mod.binary$dev.ratio)))
@@ -940,14 +951,14 @@ df$model_vars[which.min(df$aic)]
 df$model_vars[which.min(df$bic)]
 
 
-### The best-fitting model, according to both AIC and BIC, is the not true model, as it includes 'high_sep' (as default), plus 'crit1' and 'int1' (as per the true model), but also includes the additional variable 'green_inc12_int' (as per the visual inspection method above). This models does still include the correct interaction term ('int1') in the final model, however.
+### The best-fitting model, according to both AIC and BIC, is the not true model, as it includes 'high_sep' (as default), plus 'crit3' and 'int3' (as per the true model), but also includes the additional variable 'green_inc23' (as per the visual inspection method above). These models do still include the correct interaction term ('int3') in the final model, however.
 
 
 ## Run selective inference on the best-fitting lasso model (this is the same for both AIC and BIC)
 
 # select the chosen lambda value
 (lambda <- as.numeric(df$Lambda[which.min(df$aic)]))
-lambda <- 0.01036
+lambda <- 0.010055
 
 # Extract the coefficients (note: have to *include* the intercept for logistic models).
 beta <- coef(mod.binary, s = lambda, x = x_hypos, y = overweight, 
@@ -965,27 +976,9 @@ colnames(si_res) <- c("Variable", "Beta", "SE", "Pvalue", "CI.lo", "CI.up")
 si_res[,-1] <- lapply(si_res[,-1], function(x) round(as.numeric(as.character(x)), 4))
 si_res
 
-## And compare against standard regression results - The coefficients are almost the same, but the confidence intervals are much wider, and the p-values much larger, in the selective inference model, to the extent that the interaction term between SEP and critical period 1 is no longer 'significant' (and the CIs cross the null considerably) in the selective inference model. Given these results differ so much, I suspect something has gone awry with the estimation (especially as the more complex model below gives more sensible results - this selective inference model had an error message that "In fixedLogitLassoInf(x, y, beta, lambda, alpha = alpha, type = type,  : Solution beta does not satisfy the KKT conditions (to within specified tolerances))", which perhaps explains this disparity, although other selective inference methods above have shown this error and given sensible results).
-summary(glm(overweight ~ high_sep + crit1 + high_sep:crit1 + green_inc12_int, family = "binomial"))
-confint(glm(overweight ~ high_sep + crit1 + high_sep:crit1 + green_inc12_int, family = "binomial"))
-
-
-## If exclude the 'green_inc12_int' term, the results are much more sensible and in alignment with the standard model
-(lambda <- max(mod.binary$lambda[mod.binary$df == 2]))
-lambda <- 0.05037
-beta <- coef(mod.binary, s = lambda, x = x_hypos, y = overweight, 
-             penalty.factor = (c(0, 0, 0, rep(1, ncol(x_hypos) - 3))), exact = TRUE)
-si_res <- fixedLassoInf(x_hypos, overweight, beta, lambda, alpha = 0.05, family = "binomial")
-si_res
-si_res$vars
-
-si_res <- as.data.frame(cbind(si_res$vars, si_res$coef0, si_res$sd, si_res$pv, si_res$ci))
-colnames(si_res) <- c("Variable", "Beta", "SE", "Pvalue", "CI.lo", "CI.up")
-si_res[,-1] <- lapply(si_res[,-1], function(x) round(as.numeric(as.character(x)), 4))
-si_res
-
-summary(glm(overweight ~ high_sep + crit1 + high_sep:crit1, family = "binomial"))
-confint(glm(overweight ~ high_sep + crit1 + high_sep:crit1, family = "binomial"))
+## And compare against standard regression results - The coefficients are almost the same, but the confidence intervals are much wider, and the p-values much larger, in the selective inference model, to the extent that the interaction term between SEP and critical period 5 is now only 'borderline significant' (and the CIs cross the null slightly) in the selective inference model, although the overall pattern of results is comparable.
+summary(glm(overweight ~ high_sep + crit3 + high_sep:crit3 + green_inc23, family = "binomial"))
+confint(glm(overweight ~ high_sep + crit3 + high_sep:crit3 + green_inc23, family = "binomial"))
 
 
 
@@ -997,10 +990,10 @@ mod.cv.binary
 
 plot(mod.cv.binary) # Plot the log lambda by MSE to show both 'optimal' and '1SE' models (number of parameters runs along the top of the plot)
 
-# Here, this 1SE model contains only 2 parameters (SEP confounder and crit1), so does not identify the correct model as it excludes the 'int1' interaction term. This is likely due to reduced power with using a binary outcome, plus potentially the 1SE cross-validated lasso model being too conservative (see the full simulation study for a more detailed exploration)
+# Here, this 1SE model contains only 2 parameters (SEP confounder and crit3), so does not identify the correct model as it excludes the 'int3' interaction term. This is likely due to reduced power with using a binary outcome, plus potentially the 1SE cross-validated lasso model being too conservative (see the full simulation study for a more detailed exploration)
 coef(mod.cv.binary, s = mod.cv.binary$lambda.1se)
 
-# The 'optimal' model contains 8 parameters, so does not correct identify the correct model (but as this optimal lasso is mainly for prediction, this increase in complexity is to be expected as the model hooks on to random noise in the data). This does contain the true parameters, though.
+# The 'optimal' model contains 9 parameters, so does not correct identify the correct model (but as this optimal lasso is mainly for prediction, this increase in complexity is to be expected as the model hooks on to random noise in the data). This does contain the true parameters, though.
 coef(mod.cv.binary, s = mod.cv.binary$lambda.min)
 
 # Save this plot
@@ -1014,13 +1007,13 @@ dev.off()
 ## Minimum MSE/prediction error
 # select the chosen lambda value
 (lambda <- mod.cv.binary$lambda.min)
-lambda <- 0.00084
+lambda <- 0.002269
 
 # Extract the coefficients (note: have to *include* the intercept for logistic models)
 beta <- coef(mod.cv.binary, s = lambda, x = x_hypos, y = overweight, 
              penalty.factor = (c(0, rep(1, ncol(x_hypos) - 1))), exact = TRUE)
 
-# Perform selective inference (weirdly, this model works fine and gives sensible results, while the AIC/BIC model above is simpler yet gives strange results...)
+# Perform selective inference (as lots of parameters, get error message and non-sensical results - Lots of 'infinite' values)
 si_res_CV_minMSE <- fixedLassoInf(x_hypos, overweight, beta, lambda, alpha = 0.05, family = "binomial")
 si_res_CV_minMSE
 si_res_CV_minMSE$vars
@@ -1037,7 +1030,7 @@ si_res_CV_minMSE
 ## Model within 1 SE of the minimum MSE model
 # select the chosen lambda value
 (lambda <- mod.cv.binary$lambda.1se)
-lambda <- 0.0181
+lambda <- 0.0337
 
 # Extract the coefficients (note: have to *include* the intercept for logistic models)
 beta <- coef(mod.cv.binary, s = lambda, x = x_hypos, y = overweight, 
@@ -1058,6 +1051,6 @@ si_res_CV_1SE
 
 
 
-#### Summary: When using a binary outcome, the methods give slightly less consistent answers compared to when using continuous outcomes, and do not always identify the true model. For instance, although the visual inspection and AIC/BIC methods both included the correct variables 'crit1' and 'int1', they erroneously included an additional variable. On the other hand, the 1SE cross-validated lasso model only identified the 'crit1' term in the final model; interpretation therefore should be made on a qualitative judgement taking information from all these methods into consideration, rather than just one. As with the continuous outcome, the cross-validated lasso with the lowest MSE selects too many variables.
+#### Summary: When using a binary outcome, the methods give slightly less consistent answers compared to when using continuous outcomes, and do not always identify the true model. For instance, although the visual inspection and AIC/BIC methods both included the correct variables 'crit3' and 'int3', they erroneously included an additional variable. On the other hand, the 1SE cross-validated lasso model only identified the 'crit3' term in the final model; interpretation therefore should be made on a qualitative judgement taking information from all these methods into consideration, rather than just one. As with the continuous outcome, the cross-validated lasso with the lowest MSE selects too many variables.
 
 

@@ -8,12 +8,12 @@
 #   - Exposures: Binary (access to green space; yes/no) vs continuous (distance to green space), and centered vs uncentered. Also want to vary the correlation between exposures to see how collinearity impacts the power of the lasso to detect the true model
 #   - Outcome: Binary (overweight/obese) vs continuous (BMI)
 
-## For these simulations, will use the same set-up as in the example simulation script, with 'access to green space' as the exposure measured at three time points, cardiometabolic health as the outcome (BMI/obesity), and SEP as a confounder/interaction term. SEP causes access to green space and the outcome (lower BMI/obesity if higher SEP), while the interaction between SEP and the first green space time-point also causes the outcome.
+## For these simulations, will use the same set-up as in the example simulation script, with 'access to green space' as the exposure measured at three time points, cardiometabolic health as the outcome (BMI/obesity), and SEP as a confounder/interaction term. SEP causes access to green space and the outcome (lower BMI/obesity if higher SEP), while the interaction between SEP and the most recent green space time-point also causes the outcome.
 
-## In addition to this scenario, we will also vary the strength of the interaction term, to explore how this impacts the power to detect the interaction, as well as varying the specific life course interaction (i.e., the main model will explore an interaction with the first critical period, while other simulations will examine interactions with accumulation and change, to see whether this impacts conclusions).
+## In addition to this scenario, we will also vary the strength of the interaction term, to explore how this impacts the power to detect the interaction, as well as varying the specific life course interaction (i.e., the main model will explore an interaction with the most recent critical period, while other simulations will examine interactions with accumulation and change, to see whether this impacts conclusions).
 
 
-### This script is for: BMI caused by first critical period and interaction with this and SEP (interaction size = moderate [2 for binary exposures; 0.02 for continuous exposures])
+### This script is for: BMI caused by most recent critical period and interaction with this and SEP (interaction size = moderate [2 for binary exposures; 0.02 for continuous exposures])
 
 ## This script also excludes any 'change' variables, to see whether simplifying the model improves performance
 
@@ -138,11 +138,11 @@ lasso_sim <- function(n_sims = 1000, sampleSize = 1000, Exposure = "Binary", Cen
 	
 	## Create the outcomes (differs depending on whether exposures are binary or continuous)
 	if (Exposure == "Binary") {
-		bmi <- 25 + (-4 * high_sep) + (-2 * green1) + (2 * high_sep * green1) + rnorm(n, 0, 3)
+		bmi <- 25 + (-4 * high_sep) + (-2 * green3) + (2 * high_sep * green3) + rnorm(n, 0, 3)
 	}
 	
 	if (Exposure == "Cont") {
-		bmi <- 28 + (-4 * high_sep) + (-0.02 * green1) + (0.02 * high_sep * green1) + rnorm(n, 0, 3)
+		bmi <- 28 + (-4 * high_sep) + (-0.02 * green3) + (0.02 * high_sep * green3) + rnorm(n, 0, 3)
 	}
 	if (Output == TRUE) {
       print("BMI summary stats:")
@@ -326,16 +326,16 @@ lasso_sim <- function(n_sims = 1000, sampleSize = 1000, Exposure = "Binary", Cen
     BIC_res_temp[i] <- ifelse(setequal(vars_split_bic, target_covars) == TRUE, 1, 0)
     
     # Store if correct main effect in final model
-    AIC_res_temp_main[i] <- ifelse("crit1" %in% vars_split_aic == TRUE, 1, 0)
-    BIC_res_temp_main[i] <- ifelse("crit1" %in% vars_split_bic == TRUE, 1, 0)
+    AIC_res_temp_main[i] <- ifelse("crit3" %in% vars_split_aic == TRUE, 1, 0)
+    BIC_res_temp_main[i] <- ifelse("crit3" %in% vars_split_bic == TRUE, 1, 0)
     
     # Store if correct interaction in final model
-    AIC_res_temp_int[i] <- ifelse("int1" %in% vars_split_aic == TRUE, 1, 0)
-    BIC_res_temp_int[i] <- ifelse("int1" %in% vars_split_bic == TRUE, 1, 0)
+    AIC_res_temp_int[i] <- ifelse("int3" %in% vars_split_aic == TRUE, 1, 0)
+    BIC_res_temp_int[i] <- ifelse("int3" %in% vars_split_bic == TRUE, 1, 0)
     
     # Store if correct main effect and interaction both in final model
-    AIC_res_temp_mainint[i] <- ifelse("crit1" %in% vars_split_aic == TRUE & "int1" %in% vars_split_aic == TRUE, 1, 0)
-    BIC_res_temp_mainint[i] <- ifelse("crit1" %in% vars_split_bic == TRUE & "int1" %in% vars_split_bic == TRUE, 1, 0)
+    AIC_res_temp_mainint[i] <- ifelse("crit3" %in% vars_split_aic == TRUE & "int3" %in% vars_split_aic == TRUE, 1, 0)
+    BIC_res_temp_mainint[i] <- ifelse("crit3" %in% vars_split_bic == TRUE & "int3" %in% vars_split_bic == TRUE, 1, 0)
     
     # Store if correct main effect and interaction both in final model, plus other variables
     AIC_res_temp_mainintextra[i] <- ifelse(AIC_res_temp_mainint[i] == 1 & AIC_res_temp[i] == 0, 1, 0)
@@ -375,9 +375,9 @@ lasso_sim <- function(n_sims = 1000, sampleSize = 1000, Exposure = "Binary", Cen
     CV_1SE_res_temp[i] <- ifelse(setequal(cv_1SE_covars, target_covars) == TRUE, 1, 0)
     
     # Store if main effect, interaction, both, and both with additional variables in final model
-    CV_1SE_res_temp_main[i] <- ifelse("crit1" %in% cv_1SE_covars == TRUE, 1, 0)
-    CV_1SE_res_temp_int[i] <- ifelse("int1" %in% cv_1SE_covars == TRUE, 1, 0)
-    CV_1SE_res_temp_mainint[i] <- ifelse("crit1" %in% cv_1SE_covars == TRUE & "int1" %in% cv_1SE_covars == TRUE, 1, 0)
+    CV_1SE_res_temp_main[i] <- ifelse("crit3" %in% cv_1SE_covars == TRUE, 1, 0)
+    CV_1SE_res_temp_int[i] <- ifelse("int3" %in% cv_1SE_covars == TRUE, 1, 0)
+    CV_1SE_res_temp_mainint[i] <- ifelse("crit3" %in% cv_1SE_covars == TRUE & "int3" %in% cv_1SE_covars == TRUE, 1, 0)
     CV_1SE_res_temp_mainintextra[i] <- ifelse(CV_1SE_res_temp_mainint[i] == 1 & CV_1SE_res_temp[i] == 0, 1, 0)
     
     
@@ -400,9 +400,9 @@ lasso_sim <- function(n_sims = 1000, sampleSize = 1000, Exposure = "Binary", Cen
     CV_minMSE_res_temp[i] <- ifelse(setequal(cv_minMSE_covars, target_covars) == TRUE, 1, 0)
     
     # Store if main effect, interaction, both, and both with additional variables in final model
-    CV_minMSE_res_temp_main[i] <- ifelse("crit1" %in% cv_minMSE_covars == TRUE, 1, 0)
-    CV_minMSE_res_temp_int[i] <- ifelse("int1" %in% cv_minMSE_covars == TRUE, 1, 0)
-    CV_minMSE_res_temp_mainint[i] <- ifelse("crit1" %in% cv_minMSE_covars == TRUE & "int1" %in% cv_minMSE_covars == TRUE, 1, 0)
+    CV_minMSE_res_temp_main[i] <- ifelse("crit3" %in% cv_minMSE_covars == TRUE, 1, 0)
+    CV_minMSE_res_temp_int[i] <- ifelse("int3" %in% cv_minMSE_covars == TRUE, 1, 0)
+    CV_minMSE_res_temp_mainint[i] <- ifelse("crit3" %in% cv_minMSE_covars == TRUE & "int3" %in% cv_minMSE_covars == TRUE, 1, 0)
     CV_minMSE_res_temp_mainintextra[i] <- ifelse(CV_minMSE_res_temp_mainint[i] == 1 & CV_minMSE_res_temp[i] == 0, 1, 0)
     
   }
@@ -435,9 +435,9 @@ lasso_sim <- function(n_sims = 1000, sampleSize = 1000, Exposure = "Binary", Cen
 
 ## Next, the number of simulations per combination of parameters (1,000), the target hypotheses we simulated are the true model, and set up a data frame to store the results in
 n_sims <- 1000
-set.seed(62876)
+set.seed(5388826)
 
-target_covars <- c("high_sep", "crit1", "int1")
+target_covars <- c("high_sep", "crit3", "int3")
 
 results <- data.frame(sampleSize = rep(c(1000, 10000), 16),
                       Exposure = rep(c(rep("Binary", 8), rep("Cont", 8)), 2),

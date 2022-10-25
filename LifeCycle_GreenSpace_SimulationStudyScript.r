@@ -8,7 +8,7 @@
 #   - Exposures: Binary (access to green space; yes/no) vs continuous (distance to green space), and centered vs uncentered. Also want to vary the correlation between exposures to see how collinearity impacts the power of the lasso to detect the true model
 #   - Outcome: Binary (overweight/obese) vs continuous (BMI)
 
-## For these simulations, will use the same set-up as in the example simulation script, with 'access to green space' as the exposure measured at three time points, cardiometabolic health as the outcome (BMI/obesity), and SEP as a confounder/interaction term. SEP causes access to green space and the outcome (lower BMI/obesity if higher SEP), while the interaction between SEP and the first green space time-point also causes the outcome (access to green space causes lower BMI/obesity, but only in those from lower SEP backgrounds).
+## For these simulations, will use the same set-up as in the example simulation script, with 'access to green space' as the exposure measured at three time points, cardiometabolic health as the outcome (BMI/obesity), and SEP as a confounder/interaction term. SEP causes access to green space and the outcome (lower BMI/obesity if higher SEP), while the interaction between SEP and the most recent green space time-point also causes the outcome (access to green space causes lower BMI/obesity, but only in those from lower SEP backgrounds).
 
 ## In addition to this scenario, we will also vary the strength of the interaction term, to explore how this impacts the power to detect the interaction, as well as varying the specific life course interaction (i.e., the main model will explore an interaction with first first critical period, while other simulations will examine interactions with accumulation and change, to see whether this impacts conclusions). Given the number of simulations to run, and that each simulation takes about 6 hours, processing time on a standard laptop may be a bit prohibitive, so will use this script to set-up and test the simulation/code, and then run the actual simulations using University of Bristol's High Performance Computing suite.
 
@@ -36,16 +36,16 @@ dag <- dagitty('dag {
                 Green2 [pos = "1,1.5"]
                 Green3 [pos = "1,2"]
                 BMI [pos = "2,0"]
-                SEP_Green1_int [pos = "1.25,0.25"]
+                SEP_Green3_int [pos = "1.33,0.5"]
                 
                 SEP -> Green1
                 SEP -> Green2
                 SEP -> Green3
                 SEP -> BMI
-                SEP -> SEP_Green1_int
-                Green1 -> BMI
-                Green1 -> SEP_Green1_int
-                SEP_Green1_int -> BMI
+                SEP -> SEP_Green3_int
+                Green3 -> SEP_Green3_int
+                Green3 -> BMI
+                SEP_Green3_int -> BMI
                 Green1 -> Green2
                 Green2 -> Green3
                 }')
@@ -102,50 +102,50 @@ rm(green3_p)
 cor(green1, green2)
 cor(green2, green3)
 
-# Now for continuous BMI outcome - Caused by SEP (higher SEP = lower BMI), plus interaction with green1 (lower SEP and access to green space = lower BMI compared to lower SEP and no access to green space). Assuming no main effect of green1 here.
-bmi <- 25 + (-4 * high_sep) + (-2 * green1) + (2 * high_sep * green1) + rnorm(n, 0, 3)
+# Now for continuous BMI outcome - Caused by SEP (higher SEP = lower BMI), plus interaction with green3 (lower SEP and access to green space = lower BMI compared to lower SEP and no access to green space). Assuming no main effect of green3 here.
+bmi <- 25 + (-4 * high_sep) + (-2 * green3) + (2 * high_sep * green3) + rnorm(n, 0, 3)
 summary(bmi)
 sd(bmi)
 
 ## descriptive stats split by possible combinations of SEP and green1 to check simulation worked
-summary(bmi[high_sep == 1 & green1 == 1]) # High SEP and access to green space in preg - Lowest BMI
-summary(bmi[high_sep == 1 & green1 == 0]) # High SEP and no access to green space in preg - Lowest BMI
-summary(bmi[high_sep == 0 & green1 == 1]) # Low SEP and access to green space in preg - Middle BMI
-summary(bmi[high_sep == 0 & green1 == 0]) # Low SEP and no access to green space in preg - Highest BMI
+summary(bmi[high_sep == 1 & green3 == 1]) # High SEP and recent access to green space - Lowest BMI
+summary(bmi[high_sep == 1 & green3 == 0]) # High SEP and no recent access to green space - Lowest BMI
+summary(bmi[high_sep == 0 & green3 == 1]) # Low SEP and recent access to green space - Middle BMI
+summary(bmi[high_sep == 0 & green3 == 0]) # Low SEP and no recent access to green space - Highest BMI
 
-# Check the 'true' model, which is SEP as confounder, interaction with green 1, and main effect of green 1. green2 and green3 should also be pretty much null. Yup, model works as expected and interaction model better fit than non-interaction model
+# Check the 'true' model, which is SEP as confounder, interaction with green 3, and main effect of green 3. green1 and green1 should also be pretty much null. Yup, model works as expected and interaction model better fit than non-interaction model
 summary(lm(bmi ~ high_sep + green1 + green2 + green3))
-summary(lm(bmi ~ high_sep + green1 + green2 + green3 + high_sep*green1))
-anova(lm(bmi ~ high_sep + green1 + green2 + green3), lm(bmi ~ high_sep + green1 + green2 + green3 + high_sep*green1))
+summary(lm(bmi ~ high_sep + green1 + green2 + green3 + high_sep*green3))
+anova(lm(bmi ~ high_sep + green1 + green2 + green3), lm(bmi ~ high_sep + green1 + green2 + green3 + high_sep*green3))
 
-AIC(lm(bmi ~ high_sep + green1 + green2 + green3)); AIC(lm(bmi ~ high_sep + green1 + green2 + green3 + high_sep*green1))
-BIC(lm(bmi ~ high_sep + green1 + green2 + green3)); BIC(lm(bmi ~ high_sep + green1 + green2 + green3 + high_sep*green1))
+AIC(lm(bmi ~ high_sep + green1 + green2 + green3)); AIC(lm(bmi ~ high_sep + green1 + green2 + green3 + high_sep*green3))
+BIC(lm(bmi ~ high_sep + green1 + green2 + green3)); BIC(lm(bmi ~ high_sep + green1 + green2 + green3 + high_sep*green3))
 
 
 ## Test different interaction strengths to ensure data looks sensible
 
 # No interaction
-bmi_noInt <- 25 + (-4 * high_sep) + (-2 * green1) + (0 * high_sep * green1) + rnorm(n, 0, 3)
+bmi_noInt <- 25 + (-4 * high_sep) + (-2 * green3) + (0 * high_sep * green3) + rnorm(n, 0, 3)
 summary(bmi); summary(bmi_noInt)
 sd(bmi); sd(bmi_noInt)
 
 # Very small interaction
-bmi_vSmallInt <- 25 + (-4 * high_sep) + (-2 * green1) + (0.5 * high_sep * green1) + rnorm(n, 0, 3)
+bmi_vSmallInt <- 25 + (-4 * high_sep) + (-2 * green3) + (0.5 * high_sep * green3) + rnorm(n, 0, 3)
 summary(bmi); summary(bmi_vSmallInt)
 sd(bmi); sd(bmi_vSmallInt)
 
 # Small interaction
-bmi_smallInt <- 25 + (-4 * high_sep) + (-2 * green1) + (1 * high_sep * green1) + rnorm(n, 0, 3)
+bmi_smallInt <- 25 + (-4 * high_sep) + (-2 * green3) + (1 * high_sep * green3) + rnorm(n, 0, 3)
 summary(bmi); summary(bmi_smallInt)
 sd(bmi); sd(bmi_smallInt)
 
 # Large interaction
-bmi_largeInt <- 25 + (-4 * high_sep) + (-2 * green1) + (3 * high_sep * green1) + rnorm(n, 0, 3)
+bmi_largeInt <- 25 + (-4 * high_sep) + (-2 * green3) + (3 * high_sep * green3) + rnorm(n, 0, 3)
 summary(bmi); summary(bmi_largeInt)
 sd(bmi); sd(bmi_largeInt)
 
 # very large interaction
-bmi_vLargeInt <- 25 + (-4 * high_sep) + (-2 * green1) + (4 * high_sep * green1) + rnorm(n, 0, 3)
+bmi_vLargeInt <- 25 + (-4 * high_sep) + (-2 * green3) + (4 * high_sep * green3) + rnorm(n, 0, 3)
 summary(bmi); summary(bmi_vLargeInt)
 sd(bmi); sd(bmi_vLargeInt)
 
@@ -339,49 +339,49 @@ rm(green3_p)
 cor(green1, green2)
 cor(green2, green3)
 
-# Now for continuous BMI outcome - Caused by SEP (higher SEP = lower BMI), plus interaction with green1 (lower SEP and access to green space = lower BMI compared to lower SEP and no access to green space). Assuming no main effect of green1 here.
-bmi <- 25 + (-4 * high_sep) + (-2 * green1) + (2 * high_sep * green1) + rnorm(n, 0, 3)
+# Now for continuous BMI outcome - Caused by SEP (higher SEP = lower BMI), plus interaction with green3 (lower SEP and access to green space = lower BMI compared to lower SEP and no access to green space). Assuming no main effect of green3 here.
+bmi <- 25 + (-4 * high_sep) + (-2 * green3) + (2 * high_sep * green3) + rnorm(n, 0, 3)
 summary(bmi)
 
 ## descriptive stats split by possible combinations of SEP and green1 to check simulation worked
-summary(bmi[high_sep == 1 & green1 == 1]) # High SEP and access to green space in preg - Lowest BMI
-summary(bmi[high_sep == 1 & green1 == 0]) # High SEP and no access to green space in preg - Lowest BMI
-summary(bmi[high_sep == 0 & green1 == 1]) # Low SEP and access to green space in preg - Middle BMI
-summary(bmi[high_sep == 0 & green1 == 0]) # Low SEP and no access to green space in preg - Highest BMI
+summary(bmi[high_sep == 1 & green3 == 1]) # High SEP and recent access to green space - Lowest BMI
+summary(bmi[high_sep == 1 & green3 == 0]) # High SEP and no recent access to green space - Lowest BMI
+summary(bmi[high_sep == 0 & green3 == 1]) # Low SEP and recent access to green space - Middle BMI
+summary(bmi[high_sep == 0 & green3 == 0]) # Low SEP and no recent access to green space - Highest BMI
 
-# Check the 'true' model, which is SEP as confounder, interaction with green 1, and main effect of green 1. green2 and green3 should also be pretty much null. Yup, model works as expected and interaction model better fit than non-interaction model
+# Check the 'true' model, which is SEP as confounder, interaction with green 3, and main effect of green 3. green1 and green2 should also be pretty much null. Yup, model works as expected and interaction model better fit than non-interaction model
 summary(lm(bmi ~ high_sep + green1 + green2 + green3))
-summary(lm(bmi ~ high_sep + green1 + green2 + green3 + high_sep*green1))
-anova(lm(bmi ~ high_sep + green1 + green2 + green3), lm(bmi ~ high_sep + green1 + green2 + green3 + high_sep*green1))
+summary(lm(bmi ~ high_sep + green1 + green2 + green3 + high_sep*green3))
+anova(lm(bmi ~ high_sep + green1 + green2 + green3), lm(bmi ~ high_sep + green1 + green2 + green3 + high_sep*green3))
 
-AIC(lm(bmi ~ high_sep + green1 + green2 + green3)); AIC(lm(bmi ~ high_sep + green1 + green2 + green3 + high_sep*green1))
-BIC(lm(bmi ~ high_sep + green1 + green2 + green3)); BIC(lm(bmi ~ high_sep + green1 + green2 + green3 + high_sep*green1))
+AIC(lm(bmi ~ high_sep + green1 + green2 + green3)); AIC(lm(bmi ~ high_sep + green1 + green2 + green3 + high_sep*green3))
+BIC(lm(bmi ~ high_sep + green1 + green2 + green3)); BIC(lm(bmi ~ high_sep + green1 + green2 + green3 + high_sep*green3))
 
 
 ## Test different interaction strengths to ensure data looks sensible
 
 # No interaction
-bmi_noInt <- 25 + (-4 * high_sep) + (-2 * green1) + (0 * high_sep * green1) + rnorm(n, 0, 3)
+bmi_noInt <- 25 + (-4 * high_sep) + (-2 * green3) + (0 * high_sep * green3) + rnorm(n, 0, 3)
 summary(bmi); summary(bmi_noInt)
 sd(bmi); sd(bmi_noInt)
 
 # Very small interaction
-bmi_vSmallInt <- 25 + (-4 * high_sep) + (-2 * green1) + (0.5 * high_sep * green1) + rnorm(n, 0, 3)
+bmi_vSmallInt <- 25 + (-4 * high_sep) + (-2 * green3) + (0.5 * high_sep * green3) + rnorm(n, 0, 3)
 summary(bmi); summary(bmi_vSmallInt)
 sd(bmi); sd(bmi_vSmallInt)
 
 # Small interaction
-bmi_smallInt <- 25 + (-4 * high_sep) + (-2 * green1) + (1 * high_sep * green1) + rnorm(n, 0, 3)
+bmi_smallInt <- 25 + (-4 * high_sep) + (-2 * green3) + (1 * high_sep * green3) + rnorm(n, 0, 3)
 summary(bmi); summary(bmi_smallInt)
 sd(bmi); sd(bmi_smallInt)
 
 # Large interaction
-bmi_largeInt <- 25 + (-4 * high_sep) + (-2 * green1) + (3 * high_sep * green1) + rnorm(n, 0, 3)
+bmi_largeInt <- 25 + (-4 * high_sep) + (-2 * green3) + (3 * high_sep * green3) + rnorm(n, 0, 3)
 summary(bmi); summary(bmi_largeInt)
 sd(bmi); sd(bmi_largeInt)
 
 # very large interaction
-bmi_vLargeInt <- 25 + (-4 * high_sep) + (-2 * green1) + (4 * high_sep * green1) + rnorm(n, 0, 3)
+bmi_vLargeInt <- 25 + (-4 * high_sep) + (-2 * green3) + (4 * high_sep * green3) + rnorm(n, 0, 3)
 summary(bmi); summary(bmi_vLargeInt)
 sd(bmi); sd(bmi_vLargeInt)
 
@@ -557,44 +557,44 @@ summary(green3)
 cor(green1, green2)
 cor(green2, green3)
 
-# Now for continuous BMI outcome - Caused by SEP (higher SEP = lower BMI), plus interaction with green1 (lower SEP and access to green space = lower BMI compared to lower SEP and no access to green space). Assuming no main effect of green1 here. Have chosen 'green1' parameter to be 0.02 BMI per unit increase in green space, as the green1 standard deviation is ~50, and two times this should cover most of the variation in green space distance, making results broadly comparable to the binary green space effect of 2 BMI units (see: Gelman, A. (2008). Scaling regression inputs by dividing by two standard deviations. Statistics in medicine, 27(15), 2865-2873.)
-bmi <- 28 + (-4 * high_sep) + (-0.02 * green1) + (0.02 * high_sep * green1) + rnorm(n, 0, 3)
+# Now for continuous BMI outcome - Caused by SEP (higher SEP = lower BMI), plus interaction with green3 (lower SEP and access to green space = lower BMI compared to lower SEP and no access to green space). Assuming no main effect of green3 here. Have chosen 'green3' parameter to be 0.02 BMI per unit increase in green space, as the green3 standard deviation is ~50, and two times this should cover most of the variation in green space distance, making results broadly comparable to the binary green space effect of 2 BMI units (see: Gelman, A. (2008). Scaling regression inputs by dividing by two standard deviations. Statistics in medicine, 27(15), 2865-2873.)
+bmi <- 28 + (-4 * high_sep) + (-0.02 * green3) + (0.02 * high_sep * green3) + rnorm(n, 0, 3)
 summary(bmi)
 sd(bmi)
 
 # Check the 'true' model, which is SEP as confounder, interaction with green 1, and main effect of green 1. green2 and green3 should also be pretty much null. Yup, model works as expected and interaction model better fit than non-interaction model
 summary(lm(bmi ~ high_sep + green1 + green2 + green3))
-summary(lm(bmi ~ high_sep + green1 + green2 + green3 + high_sep*green1))
-anova(lm(bmi ~ high_sep + green1 + green2 + green3), lm(bmi ~ high_sep + green1 + green2 + green3 + high_sep*green1))
+summary(lm(bmi ~ high_sep + green1 + green2 + green3 + high_sep*green3))
+anova(lm(bmi ~ high_sep + green1 + green2 + green3), lm(bmi ~ high_sep + green1 + green2 + green3 + high_sep*green3))
 
-AIC(lm(bmi ~ high_sep + green1 + green2 + green3)); AIC(lm(bmi ~ high_sep + green1 + green2 + green3 + high_sep*green1))
-BIC(lm(bmi ~ high_sep + green1 + green2 + green3)); BIC(lm(bmi ~ high_sep + green1 + green2 + green3 + high_sep*green1))
+AIC(lm(bmi ~ high_sep + green1 + green2 + green3)); AIC(lm(bmi ~ high_sep + green1 + green2 + green3 + high_sep*green3))
+BIC(lm(bmi ~ high_sep + green1 + green2 + green3)); BIC(lm(bmi ~ high_sep + green1 + green2 + green3 + high_sep*green3))
 
 
 ## Test different interaction strengths to ensure data looks sensible
 
 # No interaction
-bmi_noInt <- 28 + (-4 * high_sep) + (-0.02 * green1) + (0 * high_sep * green1) + rnorm(n, 0, 3)
+bmi_noInt <- 28 + (-4 * high_sep) + (-0.02 * green3) + (0 * high_sep * green3) + rnorm(n, 0, 3)
 summary(bmi); summary(bmi_noInt)
 sd(bmi); sd(bmi_noInt)
 
 # Very small interaction
-bmi_vSmallInt <- 28 + (-4 * high_sep) + (-0.02 * green1) + (0.005 * high_sep * green1) + rnorm(n, 0, 3)
+bmi_vSmallInt <- 28 + (-4 * high_sep) + (-0.02 * green3) + (0.005 * high_sep * green3) + rnorm(n, 0, 3)
 summary(bmi); summary(bmi_vSmallInt)
 sd(bmi); sd(bmi_vSmallInt)
 
 # Small interaction
-bmi_smallInt <- 28 + (-4 * high_sep) + (-0.02 * green1) + (0.01 * high_sep * green1) + rnorm(n, 0, 3)
+bmi_smallInt <- 28 + (-4 * high_sep) + (-0.02 * green3) + (0.01 * high_sep * green3) + rnorm(n, 0, 3)
 summary(bmi); summary(bmi_smallInt)
 sd(bmi); sd(bmi_smallInt)
 
 # Large interaction
-bmi_largeInt <- 28 + (-4 * high_sep) + (-0.02 * green1) + (0.03 * high_sep * green1) + rnorm(n, 0, 3)
+bmi_largeInt <- 28 + (-4 * high_sep) + (-0.02 * green3) + (0.03 * high_sep * green3) + rnorm(n, 0, 3)
 summary(bmi); summary(bmi_largeInt)
 sd(bmi); sd(bmi_largeInt)
 
 # very large interaction
-bmi_vLargeInt <- 28 + (-4 * high_sep) + (-0.02 * green1) + (0.04 * high_sep * green1) + rnorm(n, 0, 3)
+bmi_vLargeInt <- 28 + (-4 * high_sep) + (-0.02 * green3) + (0.04 * high_sep * green3) + rnorm(n, 0, 3)
 summary(bmi); summary(bmi_vLargeInt)
 sd(bmi); sd(bmi_vLargeInt)
 
@@ -816,44 +816,44 @@ summary(green3)
 cor(green1, green2)
 cor(green2, green3)
 
-# Now for continuous BMI outcome - Caused by SEP (higher SEP = lower BMI), plus interaction with green1 (lower SEP and access to green space = lower BMI compared to lower SEP and no access to green space). Assuming no main effect of green1 here.
-bmi <- 28 + (-4 * high_sep) + (-0.02 * green1) + (0.02 * high_sep * green1) + rnorm(n, 0, 3)
+# Now for continuous BMI outcome - Caused by SEP (higher SEP = lower BMI), plus interaction with green3 (lower SEP and access to green space = lower BMI compared to lower SEP and no access to green space). Assuming no main effect of green3 here.
+bmi <- 28 + (-4 * high_sep) + (-0.02 * green3) + (0.02 * high_sep * green3) + rnorm(n, 0, 3)
 summary(bmi)
 sd(bmi)
 
 # Check the 'true' model, which is SEP as confounder, interaction with green 1, and main effect of green 1. green2 and green3 should also be pretty much null. Yup, model works as expected and interaction model better fit than non-interaction model
 summary(lm(bmi ~ high_sep + green1 + green2 + green3))
-summary(lm(bmi ~ high_sep + green1 + green2 + green3 + high_sep*green1))
-anova(lm(bmi ~ high_sep + green1 + green2 + green3), lm(bmi ~ high_sep + green1 + green2 + green3 + high_sep*green1))
+summary(lm(bmi ~ high_sep + green1 + green2 + green3 + high_sep*green3))
+anova(lm(bmi ~ high_sep + green1 + green2 + green3), lm(bmi ~ high_sep + green1 + green2 + green3 + high_sep*green3))
 
-AIC(lm(bmi ~ high_sep + green1 + green2 + green3)); AIC(lm(bmi ~ high_sep + green1 + green2 + green3 + high_sep*green1))
-BIC(lm(bmi ~ high_sep + green1 + green2 + green3)); BIC(lm(bmi ~ high_sep + green1 + green2 + green3 + high_sep*green1))
+AIC(lm(bmi ~ high_sep + green1 + green2 + green3)); AIC(lm(bmi ~ high_sep + green1 + green2 + green3 + high_sep*green3))
+BIC(lm(bmi ~ high_sep + green1 + green2 + green3)); BIC(lm(bmi ~ high_sep + green1 + green2 + green3 + high_sep*green3))
 
 
 ## Test different interaction strengths to ensure data looks sensible
 
 # No interaction
-bmi_noInt <- 28 + (-4 * high_sep) + (-0.02 * green1) + (0 * high_sep * green1) + rnorm(n, 0, 3)
+bmi_noInt <- 28 + (-4 * high_sep) + (-0.02 * green3) + (0 * high_sep * green3) + rnorm(n, 0, 3)
 summary(bmi); summary(bmi_noInt)
 sd(bmi); sd(bmi_noInt)
 
 # Very small interaction
-bmi_vSmallInt <- 28 + (-4 * high_sep) + (-0.02 * green1) + (0.005 * high_sep * green1) + rnorm(n, 0, 3)
+bmi_vSmallInt <- 28 + (-4 * high_sep) + (-0.02 * green3) + (0.005 * high_sep * green3) + rnorm(n, 0, 3)
 summary(bmi); summary(bmi_vSmallInt)
 sd(bmi); sd(bmi_vSmallInt)
 
 # Small interaction
-bmi_smallInt <- 28 + (-4 * high_sep) + (-0.02 * green1) + (0.01 * high_sep * green1) + rnorm(n, 0, 3)
+bmi_smallInt <- 28 + (-4 * high_sep) + (-0.02 * green3) + (0.01 * high_sep * green3) + rnorm(n, 0, 3)
 summary(bmi); summary(bmi_smallInt)
 sd(bmi); sd(bmi_smallInt)
 
 # Large interaction
-bmi_largeInt <- 28 + (-4 * high_sep) + (-0.02 * green1) + (0.03 * high_sep * green1) + rnorm(n, 0, 3)
+bmi_largeInt <- 28 + (-4 * high_sep) + (-0.02 * green3) + (0.03 * high_sep * green3) + rnorm(n, 0, 3)
 summary(bmi); summary(bmi_largeInt)
 sd(bmi); sd(bmi_largeInt)
 
 # very large interaction
-bmi_vLargeInt <- 28 + (-4 * high_sep) + (-0.02 * green1) + (0.04 * high_sep * green1) + rnorm(n, 0, 3)
+bmi_vLargeInt <- 28 + (-4 * high_sep) + (-0.02 * green3) + (0.04 * high_sep * green3) + rnorm(n, 0, 3)
 summary(bmi); summary(bmi_vLargeInt)
 sd(bmi); sd(bmi_vLargeInt)
 
@@ -1068,25 +1068,25 @@ lasso_sim <- function(n_sims = 1000, sampleSize = 1000, Exposure = "Binary", Cen
   
   # Initiate vectors to save results from this simulation to (i.e., whether method identified correct model or not)
   AIC_res_temp <- rep(NA, n_sims)
-  AIC_res_temp_crit1 <- rep(NA, n_sims) # Store if 'crit1' main effect in final model
-  AIC_res_temp_int1 <- rep(NA, n_sims) # Store if 'int1' interaction effect in final model
-  AIC_res_temp_crit1int1 <- rep(NA, n_sims) # Store if 'crit1' and 'int1' in final model
-  AIC_res_temp_crit1int1extra <- rep(NA, n_sims) # Store if 'crit1' and 'int1', plus extra vars, in final model
+  AIC_res_temp_crit3 <- rep(NA, n_sims) # Store if 'crit3' main effect in final model
+  AIC_res_temp_int3 <- rep(NA, n_sims) # Store if 'int3' interaction effect in final model
+  AIC_res_temp_crit3int3 <- rep(NA, n_sims) # Store if 'crit3' and 'int3' in final model
+  AIC_res_temp_crit3int3extra <- rep(NA, n_sims) # Store if 'crit3' and 'int3', plus extra vars, in final model
   BIC_res_temp <- rep(NA, n_sims)
-  BIC_res_temp_crit1 <- rep(NA, n_sims) # Store if 'crit1' main effect in final model
-  BIC_res_temp_int1 <- rep(NA, n_sims) # Store if 'int1' interaction effect in final model
-  BIC_res_temp_crit1int1 <- rep(NA, n_sims) # Store if 'crit1' and 'int1' in final model
-  BIC_res_temp_crit1int1extra <- rep(NA, n_sims) # Store if 'crit1' and 'int1', plus extra vars, in final model
+  BIC_res_temp_crit3 <- rep(NA, n_sims) # Store if 'crit3' main effect in final model
+  BIC_res_temp_int3 <- rep(NA, n_sims) # Store if 'int3' interaction effect in final model
+  BIC_res_temp_crit3int3 <- rep(NA, n_sims) # Store if 'crit3' and 'int3' in final model
+  BIC_res_temp_crit3int3extra <- rep(NA, n_sims) # Store if 'crit3' and 'int3', plus extra vars, in final model
   CV_1SE_res_temp <- rep(NA, n_sims)
-  CV_1SE_res_temp_crit1 <- rep(NA, n_sims) # Store if 'crit1' main effect in final model
-  CV_1SE_res_temp_int1 <- rep(NA, n_sims) # Store if 'int1' interaction effect in final model
-  CV_1SE_res_temp_crit1int1 <- rep(NA, n_sims) # Store if 'crit1' and 'int1' in final model
-  CV_1SE_res_temp_crit1int1extra <- rep(NA, n_sims) # Store if 'crit1' and 'int1', plus extra vars, in final model
+  CV_1SE_res_temp_crit3 <- rep(NA, n_sims) # Store if 'crit3' main effect in final model
+  CV_1SE_res_temp_int3 <- rep(NA, n_sims) # Store if 'int3' interaction effect in final model
+  CV_1SE_res_temp_crit3int3 <- rep(NA, n_sims) # Store if 'crit3' and 'int3' in final model
+  CV_1SE_res_temp_crit3int3extra <- rep(NA, n_sims) # Store if 'crit3' and 'int3', plus extra vars, in final model
   CV_minMSE_res_temp <- rep(NA, n_sims)
-  CV_minMSE_res_temp_crit1 <- rep(NA, n_sims) # Store if 'crit1' main effect in final model
-  CV_minMSE_res_temp_int1 <- rep(NA, n_sims) # Store if 'int1' interaction effect in final model
-  CV_minMSE_res_temp_crit1int1 <- rep(NA, n_sims) # Store if 'crit1' and 'int1' in final model
-  CV_minMSE_res_temp_crit1int1extra <- rep(NA, n_sims) # Store if 'crit1' and 'int1', plus extra vars, in final model
+  CV_minMSE_res_temp_crit3 <- rep(NA, n_sims) # Store if 'crit3' main effect in final model
+  CV_minMSE_res_temp_int3 <- rep(NA, n_sims) # Store if 'int3' interaction effect in final model
+  CV_minMSE_res_temp_crit3int3 <- rep(NA, n_sims) # Store if 'crit3' and 'int3' in final model
+  CV_minMSE_res_temp_crit3int3extra <- rep(NA, n_sims) # Store if 'crit3' and 'int3', plus extra vars, in final model
   
   for (i in 1:n_sims) {
     
@@ -1188,11 +1188,11 @@ lasso_sim <- function(n_sims = 1000, sampleSize = 1000, Exposure = "Binary", Cen
     
     ## Create the outcomes (differs depending on whether exposures are binary or continuous)
     if (Exposure == "Binary") {
-      bmi <- 25 + (-4 * high_sep) + (-2 * green1) + (2 * high_sep * green1) + rnorm(n, 0, 3)
+      bmi <- 25 + (-4 * high_sep) + (-2 * green3) + (2 * high_sep * green3) + rnorm(n, 0, 3)
     }
     
     if (Exposure == "Cont") {
-      bmi <- 28 + (-4 * high_sep) + (-0.02 * green1) + (0.02 * high_sep * green1) + rnorm(n, 0, 3)
+      bmi <- 28 + (-4 * high_sep) + (-0.02 * green3) + (0.02 * high_sep * green3) + rnorm(n, 0, 3)
     }
     
     # If outcome is binary
@@ -1399,21 +1399,21 @@ lasso_sim <- function(n_sims = 1000, sampleSize = 1000, Exposure = "Binary", Cen
     vars_split_bic <- strsplit(df$model_vars[which.min(df$bic)], " ")[[1]] # Split the variables
     BIC_res_temp[i] <- ifelse(setequal(vars_split_bic, target_covars) == TRUE, 1, 0)
     
-    # Store if 'crit1' in final model
-    AIC_res_temp_crit1[i] <- ifelse("crit1" %in% vars_split_aic == TRUE, 1, 0)
-    BIC_res_temp_crit1[i] <- ifelse("crit1" %in% vars_split_bic == TRUE, 1, 0)
+    # Store if 'crit3' in final model
+    AIC_res_temp_crit3[i] <- ifelse("crit3" %in% vars_split_aic == TRUE, 1, 0)
+    BIC_res_temp_crit3[i] <- ifelse("crit3" %in% vars_split_bic == TRUE, 1, 0)
     
-    # Store if 'int1' in final model
-    AIC_res_temp_int1[i] <- ifelse("int1" %in% vars_split_aic == TRUE, 1, 0)
-    BIC_res_temp_int1[i] <- ifelse("int1" %in% vars_split_bic == TRUE, 1, 0)
+    # Store if 'int3' in final model
+    AIC_res_temp_int3[i] <- ifelse("int3" %in% vars_split_aic == TRUE, 1, 0)
+    BIC_res_temp_int3[i] <- ifelse("int3" %in% vars_split_bic == TRUE, 1, 0)
     
-    # Store if 'crit1' and 'int1' both in final model
-    AIC_res_temp_crit1int1[i] <- ifelse("crit1" %in% vars_split_aic == TRUE & "int1" %in% vars_split_aic == TRUE, 1, 0)
-    BIC_res_temp_crit1int1[i] <- ifelse("crit1" %in% vars_split_bic == TRUE & "int1" %in% vars_split_bic == TRUE, 1, 0)
+    # Store if 'crit3' and 'int3' both in final model
+    AIC_res_temp_crit3int3[i] <- ifelse("crit3" %in% vars_split_aic == TRUE & "int3" %in% vars_split_aic == TRUE, 1, 0)
+    BIC_res_temp_crit3int3[i] <- ifelse("crit3" %in% vars_split_bic == TRUE & "int3" %in% vars_split_bic == TRUE, 1, 0)
     
-    # Store if 'crit1' and 'int1' both in final model, plus other variables
-    AIC_res_temp_crit1int1extra[i] <- ifelse(AIC_res_temp_crit1int1[i] == 1 & AIC_res_temp[i] == 0, 1, 0)
-    BIC_res_temp_crit1int1extra[i] <- ifelse(BIC_res_temp_crit1int1[i] == 1 & BIC_res_temp[i] == 0, 1, 0)
+    # Store if 'crit3' and 'int3' both in final model, plus other variables
+    AIC_res_temp_crit3int3extra[i] <- ifelse(AIC_res_temp_crit3int3[i] == 1 & AIC_res_temp[i] == 0, 1, 0)
+    BIC_res_temp_crit3int3extra[i] <- ifelse(BIC_res_temp_crit3int3[i] == 1 & BIC_res_temp[i] == 0, 1, 0)
     
     
     ### Next, want to summarise the 1SE and minimum MSE cross-validated lasso model, and see whether that corresponds to the correct model or not
@@ -1448,11 +1448,11 @@ lasso_sim <- function(n_sims = 1000, sampleSize = 1000, Exposure = "Binary", Cen
     ## See whether this matches the 'true' model, and code as 0 if not and 1 if so
     CV_1SE_res_temp[i] <- ifelse(setequal(cv_1SE_covars, target_covars) == TRUE, 1, 0)
     
-    # Store if 'crit1', 'int1', both, and both with additional variables in final model
-    CV_1SE_res_temp_crit1[i] <- ifelse("crit1" %in% cv_1SE_covars == TRUE, 1, 0)
-    CV_1SE_res_temp_int1[i] <- ifelse("int1" %in% cv_1SE_covars == TRUE, 1, 0)
-    CV_1SE_res_temp_crit1int1[i] <- ifelse("crit1" %in% cv_1SE_covars == TRUE & "int1" %in% cv_1SE_covars == TRUE, 1, 0)
-    CV_1SE_res_temp_crit1int1extra[i] <- ifelse(CV_1SE_res_temp_crit1int1[i] == 1 & CV_1SE_res_temp[i] == 0, 1, 0)
+    # Store if 'crit3', 'int3', both, and both with additional variables in final model
+    CV_1SE_res_temp_crit3[i] <- ifelse("crit3" %in% cv_1SE_covars == TRUE, 1, 0)
+    CV_1SE_res_temp_int3[i] <- ifelse("int3" %in% cv_1SE_covars == TRUE, 1, 0)
+    CV_1SE_res_temp_crit3int3[i] <- ifelse("crit3" %in% cv_1SE_covars == TRUE & "int3" %in% cv_1SE_covars == TRUE, 1, 0)
+    CV_1SE_res_temp_crit3int3extra[i] <- ifelse(CV_1SE_res_temp_crit3int3[i] == 1 & CV_1SE_res_temp[i] == 0, 1, 0)
     
     
     ## Next to the minimum MSE model
@@ -1473,35 +1473,35 @@ lasso_sim <- function(n_sims = 1000, sampleSize = 1000, Exposure = "Binary", Cen
     ## See whether this matches the 'true' model, and code as 0 if not and 1 if so
     CV_minMSE_res_temp[i] <- ifelse(setequal(cv_minMSE_covars, target_covars) == TRUE, 1, 0)
     
-    # Store if 'crit1', 'int1', both, and both with additional variables in final model
-    CV_minMSE_res_temp_crit1[i] <- ifelse("crit1" %in% cv_minMSE_covars == TRUE, 1, 0)
-    CV_minMSE_res_temp_int1[i] <- ifelse("int1" %in% cv_minMSE_covars == TRUE, 1, 0)
-    CV_minMSE_res_temp_crit1int1[i] <- ifelse("crit1" %in% cv_minMSE_covars == TRUE & "int1" %in% cv_minMSE_covars == TRUE, 1, 0)
-    CV_minMSE_res_temp_crit1int1extra[i] <- ifelse(CV_minMSE_res_temp_crit1int1[i] == 1 & CV_minMSE_res_temp[i] == 0, 1, 0)
+    # Store if 'crit3', 'int3', both, and both with additional variables in final model
+    CV_minMSE_res_temp_crit3[i] <- ifelse("crit3" %in% cv_minMSE_covars == TRUE, 1, 0)
+    CV_minMSE_res_temp_int3[i] <- ifelse("int3" %in% cv_minMSE_covars == TRUE, 1, 0)
+    CV_minMSE_res_temp_crit3int3[i] <- ifelse("crit3" %in% cv_minMSE_covars == TRUE & "int3" %in% cv_minMSE_covars == TRUE, 1, 0)
+    CV_minMSE_res_temp_crit3int3extra[i] <- ifelse(CV_minMSE_res_temp_crit3int3[i] == 1 & CV_minMSE_res_temp[i] == 0, 1, 0)
     
   }
   
   # Store the summaries of these results to transfer to the main results table
   res <- data.frame(AIC_propcorrect = round(sum(AIC_res_temp) / n_sims * 100, 2),
-                    AIC_crit1correct = round(sum(AIC_res_temp_crit1) / n_sims * 100, 2),
-                    AIC_int1correct = round(sum(AIC_res_temp_int1) / n_sims * 100, 2),
-                    AIC_crit1int1correct = round(sum(AIC_res_temp_crit1int1) / n_sims * 100, 2),
-                    AIC_crit1int1extra = round(sum(AIC_res_temp_crit1int1extra) / n_sims * 100, 2),
+                    AIC_crit3correct = round(sum(AIC_res_temp_crit3) / n_sims * 100, 2),
+                    AIC_int3correct = round(sum(AIC_res_temp_int3) / n_sims * 100, 2),
+                    AIC_crit3int3correct = round(sum(AIC_res_temp_crit3int3) / n_sims * 100, 2),
+                    AIC_crit3int3extra = round(sum(AIC_res_temp_crit3int3extra) / n_sims * 100, 2),
                     BIC_propcorrect = round(sum(BIC_res_temp) / n_sims * 100, 2),
-                    BIC_crit1correct = round(sum(BIC_res_temp_crit1) / n_sims * 100, 2),
-                    BIC_int1correct = round(sum(BIC_res_temp_int1) / n_sims * 100, 2),
-                    BIC_crit1int1correct = round(sum(BIC_res_temp_crit1int1) / n_sims * 100, 2),
-                    BIC_crit1int1extra = round(sum(BIC_res_temp_crit1int1extra) / n_sims * 100, 2),
+                    BIC_crit3correct = round(sum(BIC_res_temp_crit3) / n_sims * 100, 2),
+                    BIC_int3correct = round(sum(BIC_res_temp_int3) / n_sims * 100, 2),
+                    BIC_crit3int3correct = round(sum(BIC_res_temp_crit3int3) / n_sims * 100, 2),
+                    BIC_crit3int3extra = round(sum(BIC_res_temp_crit3int3extra) / n_sims * 100, 2),
                     CV_1SE_propcorrect = round(sum(CV_1SE_res_temp) / n_sims * 100, 2),
-                    CV_1SE_crit1correct = round(sum(CV_1SE_res_temp_crit1) / n_sims * 100, 2),
-                    CV_1SE_int1correct = round(sum(CV_1SE_res_temp_int1) / n_sims * 100, 2),
-                    CV_1SE_crit1int1correct = round(sum(CV_1SE_res_temp_crit1int1) / n_sims * 100, 2),
-                    CV_1SE_crit1int1extra = round(sum(CV_1SE_res_temp_crit1int1extra) / n_sims * 100, 2),
+                    CV_1SE_crit3correct = round(sum(CV_1SE_res_temp_crit3) / n_sims * 100, 2),
+                    CV_1SE_int3correct = round(sum(CV_1SE_res_temp_int3) / n_sims * 100, 2),
+                    CV_1SE_crit3int3correct = round(sum(CV_1SE_res_temp_crit3int3) / n_sims * 100, 2),
+                    CV_1SE_crit3int3extra = round(sum(CV_1SE_res_temp_crit3int3extra) / n_sims * 100, 2),
                     CV_minMSE_propcorrect = round(sum(CV_minMSE_res_temp) / n_sims * 100, 2),
-                    CV_minMSE_crit1correct = round(sum(CV_minMSE_res_temp_crit1) / n_sims * 100, 2),
-                    CV_minMSE_int1correct = round(sum(CV_minMSE_res_temp_int1) / n_sims * 100, 2),
-                    CV_minMSE_crit1int1correct = round(sum(CV_minMSE_res_temp_crit1int1) / n_sims * 100, 2),
-                    CV_minMSE_crit1int1extra = round(sum(CV_minMSE_res_temp_crit1int1extra) / n_sims * 100, 2))
+                    CV_minMSE_crit3correct = round(sum(CV_minMSE_res_temp_crit3) / n_sims * 100, 2),
+                    CV_minMSE_int3correct = round(sum(CV_minMSE_res_temp_int3) / n_sims * 100, 2),
+                    CV_minMSE_crit3int3correct = round(sum(CV_minMSE_res_temp_crit3int3) / n_sims * 100, 2),
+                    CV_minMSE_crit3int3extra = round(sum(CV_minMSE_res_temp_crit3int3extra) / n_sims * 100, 2))
   return(res)
   
 }
@@ -1511,7 +1511,7 @@ lasso_sim <- function(n_sims = 1000, sampleSize = 1000, Exposure = "Binary", Cen
 n_sims <- 10
 set.seed(9876)
 
-target_covars <- c("high_sep", "crit1", "int1")
+target_covars <- c("high_sep", "crit3", "int3")
 
 results <- data.frame(sampleSize = rep(c(1000, 10000), 16),
                       Exposure = rep(c(rep("Binary", 8), rep("Cont", 8)), 2),
@@ -1519,25 +1519,25 @@ results <- data.frame(sampleSize = rep(c(1000, 10000), 16),
                       Collinear = rep(c(rep("Low", 4), rep("High", 4)), 4),
                       Outcome = c(rep("Cont", 16), rep("Binary", 16)),
                       AIC_propcorrect = rep(NA, 32),
-                      AIC_crit1correct = rep(NA, 32),
-                      AIC_int1correct = rep(NA, 32),
-                      AIC_crit1int1correct = rep(NA, 32),
-                      AIC_crit1int1extra = rep(NA, 32),
+                      AIC_crit3correct = rep(NA, 32),
+                      AIC_int3correct = rep(NA, 32),
+                      AIC_crit3int3correct = rep(NA, 32),
+                      AIC_crit3int3extra = rep(NA, 32),
                       BIC_propcorrect = rep(NA, 32),
-                      BIC_crit1correct = rep(NA, 32),
-                      BIC_int1correct = rep(NA, 32),
-                      BIC_crit1int1correct = rep(NA, 32),
-                      BIC_crit1int1extra = rep(NA, 32),
+                      BIC_crit3correct = rep(NA, 32),
+                      BIC_int3correct = rep(NA, 32),
+                      BIC_crit3int3correct = rep(NA, 32),
+                      BIC_crit3int3extra = rep(NA, 32),
                       CV_1SE_propcorrect = rep(NA, 32),
-                      CV_1SE_crit1correct = rep(NA, 32),
-                      CV_1SE_int1correct = rep(NA, 32),
-                      CV_1SE_crit1int1correct = rep(NA, 32),
-                      CV_1SE_crit1int1extra = rep(NA, 32),
+                      CV_1SE_crit3correct = rep(NA, 32),
+                      CV_1SE_int3correct = rep(NA, 32),
+                      CV_1SE_crit3int3correct = rep(NA, 32),
+                      CV_1SE_crit3int3extra = rep(NA, 32),
                       CV_minMSE_propcorrect = rep(NA, 32),
-                      CV_minMSE_crit1correct = rep(NA, 32),
-                      CV_minMSE_int1correct = rep(NA, 32),
-                      CV_minMSE_crit1int1correct = rep(NA, 32),
-                      CV_minMSE_crit1int1extra = rep(NA, 32))
+                      CV_minMSE_crit3correct = rep(NA, 32),
+                      CV_minMSE_int3correct = rep(NA, 32),
+                      CV_minMSE_crit3int3correct = rep(NA, 32),
+                      CV_minMSE_crit3int3extra = rep(NA, 32))
 
 results
 
@@ -1847,32 +1847,32 @@ write.csv(results, file = "simulationResults_test.csv", row.names = FALSE)
 
 
 
-### Testing parameter combination 2 (Sample size = 10000; binary exposure; uncentered; low collinearity; continuous outcome) to explore why it correctly detects crit1 and int1 in all models, but erroneously includes other variables
+### Testing parameter combination 2 (Sample size = 10000; binary exposure; uncentered; low collinearity; continuous outcome) to explore why it correctly detects crit3 and int3 in all models, but erroneously includes other variables as well
 
 # Initiate a vector to save results from this simulation to (i.e., whether method identified correct model or not)
 set.seed(1234)
 n_sims <- 1
 
 AIC_res_temp <- rep(NA, n_sims)
-AIC_res_temp_crit1 <- rep(NA, n_sims) # Store if 'crit1' main effect in final model
-AIC_res_temp_int1 <- rep(NA, n_sims) # Store if 'int1' interaction effect in final model
-AIC_res_temp_crit1int1 <- rep(NA, n_sims) # Store if 'crit1' and 'int1' in final model
-AIC_res_temp_crit1int1extra <- rep(NA, n_sims) # Store if 'crit1' and 'int1', plus extra vars, in final model
+AIC_res_temp_crit3 <- rep(NA, n_sims) # Store if 'crit3' main effect in final model
+AIC_res_temp_int3 <- rep(NA, n_sims) # Store if 'int3' interaction effect in final model
+AIC_res_temp_crit3int3 <- rep(NA, n_sims) # Store if 'crit3' and 'int3' in final model
+AIC_res_temp_crit3int3extra <- rep(NA, n_sims) # Store if 'crit3' and 'int3', plus extra vars, in final model
 BIC_res_temp <- rep(NA, n_sims)
-BIC_res_temp_crit1 <- rep(NA, n_sims) # Store if 'crit1' main effect in final model
-BIC_res_temp_int1 <- rep(NA, n_sims) # Store if 'int1' interaction effect in final model
-BIC_res_temp_crit1int1 <- rep(NA, n_sims) # Store if 'crit1' and 'int1' in final model
-BIC_res_temp_crit1int1extra <- rep(NA, n_sims) # Store if 'crit1' and 'int1', plus extra vars, in final model
+BIC_res_temp_crit3 <- rep(NA, n_sims) # Store if 'crit3' main effect in final model
+BIC_res_temp_int3 <- rep(NA, n_sims) # Store if 'int3' interaction effect in final model
+BIC_res_temp_crit3int3 <- rep(NA, n_sims) # Store if 'crit3' and 'int3' in final model
+BIC_res_temp_crit3int3extra <- rep(NA, n_sims) # Store if 'crit3' and 'int3', plus extra vars, in final model
 CV_1SE_res_temp <- rep(NA, n_sims)
-CV_1SE_res_temp_crit1 <- rep(NA, n_sims) # Store if 'crit1' main effect in final model
-CV_1SE_res_temp_int1 <- rep(NA, n_sims) # Store if 'int1' interaction effect in final model
-CV_1SE_res_temp_crit1int1 <- rep(NA, n_sims) # Store if 'crit1' and 'int1' in final model
-CV_1SE_res_temp_crit1int1extra <- rep(NA, n_sims) # Store if 'crit1' and 'int1', plus extra vars, in final model
+CV_1SE_res_temp_crit3 <- rep(NA, n_sims) # Store if 'crit3' main effect in final model
+CV_1SE_res_temp_int3 <- rep(NA, n_sims) # Store if 'int3' interaction effect in final model
+CV_1SE_res_temp_crit3int3 <- rep(NA, n_sims) # Store if 'crit3' and 'int3' in final model
+CV_1SE_res_temp_crit3int3extra <- rep(NA, n_sims) # Store if 'crit3' and 'int3', plus extra vars, in final model
 CV_minMSE_res_temp <- rep(NA, n_sims)
-CV_minMSE_res_temp_crit1 <- rep(NA, n_sims) # Store if 'crit1' main effect in final model
-CV_minMSE_res_temp_int1 <- rep(NA, n_sims) # Store if 'int1' interaction effect in final model
-CV_minMSE_res_temp_crit1int1 <- rep(NA, n_sims) # Store if 'crit1' and 'int1' in final model
-CV_minMSE_res_temp_crit1int1extra <- rep(NA, n_sims) # Store if 'crit1' and 'int1', plus extra vars, in final model
+CV_minMSE_res_temp_crit3 <- rep(NA, n_sims) # Store if 'crit3' main effect in final model
+CV_minMSE_res_temp_int3 <- rep(NA, n_sims) # Store if 'int3' interaction effect in final model
+CV_minMSE_res_temp_crit3int3 <- rep(NA, n_sims) # Store if 'crit3' and 'int3' in final model
+CV_minMSE_res_temp_crit3int3extra <- rep(NA, n_sims) # Store if 'crit3' and 'int3', plus extra vars, in final model
 
 for (i in 1:n_sims) {
   
@@ -1888,7 +1888,7 @@ for (i in 1:n_sims) {
   green2 <- rbinom(n, 1, green2_p)
   green3_p <- plogis(log(0.3) + (log(3) * high_sep) + (log(3) * green2)) # Third green space exposure
   green3 <- rbinom(n, 1, green3_p)
-  bmi <- 25 + (-4 * high_sep) + (-2 * green1) + (2 * high_sep * green1) + rnorm(n, 0, 3) # Cont. BMI outcome
+  bmi <- 25 + (-4 * high_sep) + (-2 * green3) + (2 * high_sep * green3) + rnorm(n, 0, 3) # Cont. BMI outcome
   
   ## Encode the life course hypotheses
   crit1 <- green1 # Critical period at first time point only
@@ -2038,21 +2038,21 @@ for (i in 1:n_sims) {
   vars_split_bic <- strsplit(df$model_vars[which.min(df$bic)], " ")[[1]] # Split the variables
   BIC_res_temp[i] <- ifelse(setequal(vars_split_bic, target_covars) == TRUE, 1, 0)
   
-  # Store if 'crit1' in final model
-  AIC_res_temp_crit1[i] <- ifelse("crit1" %in% vars_split_aic == TRUE, 1, 0)
-  BIC_res_temp_crit1[i] <- ifelse("crit1" %in% vars_split_bic == TRUE, 1, 0)
+  # Store if 'crit3' in final model
+  AIC_res_temp_crit3[i] <- ifelse("crit3" %in% vars_split_aic == TRUE, 1, 0)
+  BIC_res_temp_crit3[i] <- ifelse("crit3" %in% vars_split_bic == TRUE, 1, 0)
   
-  # Store if 'int1' in final model
-  AIC_res_temp_int1[i] <- ifelse("int1" %in% vars_split_aic == TRUE, 1, 0)
-  BIC_res_temp_int1[i] <- ifelse("int1" %in% vars_split_bic == TRUE, 1, 0)
+  # Store if 'int3' in final model
+  AIC_res_temp_int3[i] <- ifelse("int3" %in% vars_split_aic == TRUE, 1, 0)
+  BIC_res_temp_int3[i] <- ifelse("int3" %in% vars_split_bic == TRUE, 1, 0)
   
-  # Store if 'crit1' and 'int1' both in final model
-  AIC_res_temp_crit1int1[i] <- ifelse("crit1" %in% vars_split_aic == TRUE & "int1" %in% vars_split_aic == TRUE, 1, 0)
-  BIC_res_temp_crit1int1[i] <- ifelse("crit1" %in% vars_split_bic == TRUE & "int1" %in% vars_split_bic == TRUE, 1, 0)
+  # Store if 'crit3' and 'int3' both in final model
+  AIC_res_temp_crit3int3[i] <- ifelse("crit3" %in% vars_split_aic == TRUE & "int3" %in% vars_split_aic == TRUE, 1, 0)
+  BIC_res_temp_crit3int3[i] <- ifelse("crit3" %in% vars_split_bic == TRUE & "int3" %in% vars_split_bic == TRUE, 1, 0)
   
-  # Store if 'crit1' and 'int1' both in final model, plus other variables
-  AIC_res_temp_crit1int1extra[i] <- ifelse(AIC_res_temp_crit1int1[i] == 1 & AIC_res_temp[i] == 0, 1, 0)
-  BIC_res_temp_crit1int1extra[i] <- ifelse(BIC_res_temp_crit1int1[i] == 1 & BIC_res_temp[i] == 0, 1, 0)
+  # Store if 'crit3' and 'int3' both in final model, plus other variables
+  AIC_res_temp_crit3int3extra[i] <- ifelse(AIC_res_temp_crit3int3[i] == 1 & AIC_res_temp[i] == 0, 1, 0)
+  BIC_res_temp_crit3int3extra[i] <- ifelse(BIC_res_temp_crit3int3[i] == 1 & BIC_res_temp[i] == 0, 1, 0)
   
   
   ### Next, want to summarise the 1SE and minimum MSE cross-validated lasso model, and see whether that corresponds to the correct model or not
@@ -2074,11 +2074,11 @@ for (i in 1:n_sims) {
   ## See whether this matches the 'true' model, and code as 0 if not and 1 if so
   CV_1SE_res_temp[i] <- ifelse(setequal(cv_1SE_covars, target_covars) == TRUE, 1, 0)
   
-  # Store if 'crit1', 'int1', both, and both with additional variables in final model
-  CV_1SE_res_temp_crit1[i] <- ifelse("crit1" %in% cv_1SE_covars == TRUE, 1, 0)
-  CV_1SE_res_temp_int1[i] <- ifelse("int1" %in% cv_1SE_covars == TRUE, 1, 0)
-  CV_1SE_res_temp_crit1int1[i] <- ifelse("crit1" %in% cv_1SE_covars == TRUE & "int1" %in% cv_1SE_covars == TRUE, 1, 0)
-  CV_1SE_res_temp_crit1int1extra[i] <- ifelse(CV_1SE_res_temp_crit1int1[i] == 1 & CV_1SE_res_temp[i] == 0, 1, 0)
+  # Store if 'crit3', 'int3', both, and both with additional variables in final model
+  CV_1SE_res_temp_crit3[i] <- ifelse("crit3" %in% cv_1SE_covars == TRUE, 1, 0)
+  CV_1SE_res_temp_int3[i] <- ifelse("int3" %in% cv_1SE_covars == TRUE, 1, 0)
+  CV_1SE_res_temp_crit3int3[i] <- ifelse("crit3" %in% cv_1SE_covars == TRUE & "int3" %in% cv_1SE_covars == TRUE, 1, 0)
+  CV_1SE_res_temp_crit3int3extra[i] <- ifelse(CV_1SE_res_temp_crit3int3[i] == 1 & CV_1SE_res_temp[i] == 0, 1, 0)
   
   
   ## Next to the minimum MSE model
@@ -2097,11 +2097,11 @@ for (i in 1:n_sims) {
   ## See whether this matches the 'true' model, and code as 0 if not and 1 if so
   CV_minMSE_res_temp[i] <- ifelse(setequal(cv_minMSE_covars, target_covars) == TRUE, 1, 0)
   
-  # Store if 'crit1', 'int1', both, and both with additional variables in final model
-  CV_minMSE_res_temp_crit1[i] <- ifelse("crit1" %in% cv_minMSE_covars == TRUE, 1, 0)
-  CV_minMSE_res_temp_int1[i] <- ifelse("int1" %in% cv_minMSE_covars == TRUE, 1, 0)
-  CV_minMSE_res_temp_crit1int1[i] <- ifelse("crit1" %in% cv_minMSE_covars == TRUE & "int1" %in% cv_minMSE_covars == TRUE, 1, 0)
-  CV_minMSE_res_temp_crit1int1extra[i] <- ifelse(CV_minMSE_res_temp_crit1int1[i] == 1 & CV_minMSE_res_temp[i] == 0, 1, 0)
+  # Store if 'crit3', 'int3', both, and both with additional variables in final model
+  CV_minMSE_res_temp_crit3[i] <- ifelse("crit3" %in% cv_minMSE_covars == TRUE, 1, 0)
+  CV_minMSE_res_temp_int3[i] <- ifelse("int3" %in% cv_minMSE_covars == TRUE, 1, 0)
+  CV_minMSE_res_temp_crit3int3[i] <- ifelse("crit3" %in% cv_minMSE_covars == TRUE & "int3" %in% cv_minMSE_covars == TRUE, 1, 0)
+  CV_minMSE_res_temp_crit3int3extra[i] <- ifelse(CV_minMSE_res_temp_crit3int3[i] == 1 & CV_minMSE_res_temp[i] == 0, 1, 0)
   
 }
 
@@ -2109,10 +2109,7 @@ for (i in 1:n_sims) {
 ### Look at each step of the lasso
 df
 
-## Ah, so here, the final model also includes 'green_dec12'. This is because this variable gets added after crit1 but before int1 (where 'green_dec12' *is* associated with the outcome), so does not get removed before 'int1' gets added to the model; but once 'int1' gets included, there is no association between 'green_dec12' and the outcome. but gets included in the final model regardless.
-summary(lm(bmi ~ x_hypos[, "high_sep"] + x_hypos[, "crit1"]))
-summary(lm(bmi ~ x_hypos[, "high_sep"] + x_hypos[, "crit1"] + x_hypos[, "green_dec12"]))
-summary(lm(bmi ~ x_hypos[, "high_sep"] + x_hypos[, "crit1"] + x_hypos[, "green_dec12"] + x_hypos[, "int1"]))
+## In this case, the first two models added are 'crit3' and 'int3', but there are some models with slightly lower AIC values which contain additional variables. It is also possible that in some cases the final model also includes additional variables because said variable gets added after crit3 but before int3 (where said variable *is* associated with the outcome), so does not get removed before 'int3' gets added to the model; but once 'int3' gets included, there is no association between said variable and the outcome. but gets included in the final model regardless.
 
 
 
@@ -2134,25 +2131,25 @@ lasso_sim_reduced <- function(n_sims = 1000, sampleSize = 1000, Exposure = "Bina
   
   # Initiate vectors to save results from this simulation to (i.e., whether method identified correct model or not)
   AIC_res_temp <- rep(NA, n_sims)
-  AIC_res_temp_crit1 <- rep(NA, n_sims) # Store if 'crit1' main effect in final model
-  AIC_res_temp_int1 <- rep(NA, n_sims) # Store if 'int1' interaction effect in final model
-  AIC_res_temp_crit1int1 <- rep(NA, n_sims) # Store if 'crit1' and 'int1' in final model
-  AIC_res_temp_crit1int1extra <- rep(NA, n_sims) # Store if 'crit1' and 'int1', plus extra vars, in final model
+  AIC_res_temp_crit3 <- rep(NA, n_sims) # Store if 'crit3' main effect in final model
+  AIC_res_temp_int3 <- rep(NA, n_sims) # Store if 'int3' interaction effect in final model
+  AIC_res_temp_crit3int3 <- rep(NA, n_sims) # Store if 'crit3' and 'int3' in final model
+  AIC_res_temp_crit3int3extra <- rep(NA, n_sims) # Store if 'crit3' and 'int3', plus extra vars, in final model
   BIC_res_temp <- rep(NA, n_sims)
-  BIC_res_temp_crit1 <- rep(NA, n_sims) # Store if 'crit1' main effect in final model
-  BIC_res_temp_int1 <- rep(NA, n_sims) # Store if 'int1' interaction effect in final model
-  BIC_res_temp_crit1int1 <- rep(NA, n_sims) # Store if 'crit1' and 'int1' in final model
-  BIC_res_temp_crit1int1extra <- rep(NA, n_sims) # Store if 'crit1' and 'int1', plus extra vars, in final model
+  BIC_res_temp_crit3 <- rep(NA, n_sims) # Store if 'crit3' main effect in final model
+  BIC_res_temp_int3 <- rep(NA, n_sims) # Store if 'int3' interaction effect in final model
+  BIC_res_temp_crit3int3 <- rep(NA, n_sims) # Store if 'crit3' and 'int3' in final model
+  BIC_res_temp_crit3int3extra <- rep(NA, n_sims) # Store if 'crit3' and 'int3', plus extra vars, in final model
   CV_1SE_res_temp <- rep(NA, n_sims)
-  CV_1SE_res_temp_crit1 <- rep(NA, n_sims) # Store if 'crit1' main effect in final model
-  CV_1SE_res_temp_int1 <- rep(NA, n_sims) # Store if 'int1' interaction effect in final model
-  CV_1SE_res_temp_crit1int1 <- rep(NA, n_sims) # Store if 'crit1' and 'int1' in final model
-  CV_1SE_res_temp_crit1int1extra <- rep(NA, n_sims) # Store if 'crit1' and 'int1', plus extra vars, in final model
+  CV_1SE_res_temp_crit3 <- rep(NA, n_sims) # Store if 'crit3' main effect in final model
+  CV_1SE_res_temp_int3 <- rep(NA, n_sims) # Store if 'int3' interaction effect in final model
+  CV_1SE_res_temp_crit3int3 <- rep(NA, n_sims) # Store if 'crit3' and 'int3' in final model
+  CV_1SE_res_temp_crit3int3extra <- rep(NA, n_sims) # Store if 'crit3' and 'int3', plus extra vars, in final model
   CV_minMSE_res_temp <- rep(NA, n_sims)
-  CV_minMSE_res_temp_crit1 <- rep(NA, n_sims) # Store if 'crit1' main effect in final model
-  CV_minMSE_res_temp_int1 <- rep(NA, n_sims) # Store if 'int1' interaction effect in final model
-  CV_minMSE_res_temp_crit1int1 <- rep(NA, n_sims) # Store if 'crit1' and 'int1' in final model
-  CV_minMSE_res_temp_crit1int1extra <- rep(NA, n_sims) # Store if 'crit1' and 'int1', plus extra vars, in final model
+  CV_minMSE_res_temp_crit3 <- rep(NA, n_sims) # Store if 'crit3' main effect in final model
+  CV_minMSE_res_temp_int3 <- rep(NA, n_sims) # Store if 'int3' interaction effect in final model
+  CV_minMSE_res_temp_crit3int3 <- rep(NA, n_sims) # Store if 'crit3' and 'int3' in final model
+  CV_minMSE_res_temp_crit3int3extra <- rep(NA, n_sims) # Store if 'crit3' and 'int3', plus extra vars, in final model
   
   for (i in 1:n_sims) {
     
@@ -2225,11 +2222,11 @@ lasso_sim_reduced <- function(n_sims = 1000, sampleSize = 1000, Exposure = "Bina
     
     ## Create the outcomes (differs depending on whether exposures are binary or continuous)
     if (Exposure == "Binary") {
-      bmi <- 25 + (-4 * high_sep) + (-2 * green1) + (2 * high_sep * green1) + rnorm(n, 0, 3)
+      bmi <- 25 + (-4 * high_sep) + (-2 * green3) + (2 * high_sep * green3) + rnorm(n, 0, 3)
     }
     
     if (Exposure == "Cont") {
-      bmi <- 28 + (-4 * high_sep) + (-0.02 * green1) + (0.02 * high_sep * green1) + rnorm(n, 0, 3)
+      bmi <- 28 + (-4 * high_sep) + (-0.02 * green3) + (0.02 * high_sep * green3) + rnorm(n, 0, 3)
     }
     
     # If outcome is binary
@@ -2410,21 +2407,21 @@ lasso_sim_reduced <- function(n_sims = 1000, sampleSize = 1000, Exposure = "Bina
     vars_split_bic <- strsplit(df$model_vars[which.min(df$bic)], " ")[[1]] # Split the variables
     BIC_res_temp[i] <- ifelse(setequal(vars_split_bic, target_covars) == TRUE, 1, 0)
     
-    # Store if 'crit1' in final model
-    AIC_res_temp_crit1[i] <- ifelse("crit1" %in% vars_split_aic == TRUE, 1, 0)
-    BIC_res_temp_crit1[i] <- ifelse("crit1" %in% vars_split_bic == TRUE, 1, 0)
+    # Store if 'crit3' in final model
+    AIC_res_temp_crit3[i] <- ifelse("crit3" %in% vars_split_aic == TRUE, 1, 0)
+    BIC_res_temp_crit3[i] <- ifelse("crit3" %in% vars_split_bic == TRUE, 1, 0)
     
-    # Store if 'int1' in final model
-    AIC_res_temp_int1[i] <- ifelse("int1" %in% vars_split_aic == TRUE, 1, 0)
-    BIC_res_temp_int1[i] <- ifelse("int1" %in% vars_split_bic == TRUE, 1, 0)
+    # Store if 'int3' in final model
+    AIC_res_temp_int3[i] <- ifelse("int3" %in% vars_split_aic == TRUE, 1, 0)
+    BIC_res_temp_int3[i] <- ifelse("int3" %in% vars_split_bic == TRUE, 1, 0)
     
-    # Store if 'crit1' and 'int1' both in final model
-    AIC_res_temp_crit1int1[i] <- ifelse("crit1" %in% vars_split_aic == TRUE & "int1" %in% vars_split_aic == TRUE, 1, 0)
-    BIC_res_temp_crit1int1[i] <- ifelse("crit1" %in% vars_split_bic == TRUE & "int1" %in% vars_split_bic == TRUE, 1, 0)
+    # Store if 'crit3' and 'int3' both in final model
+    AIC_res_temp_crit3int3[i] <- ifelse("crit3" %in% vars_split_aic == TRUE & "int3" %in% vars_split_aic == TRUE, 1, 0)
+    BIC_res_temp_crit3int3[i] <- ifelse("crit3" %in% vars_split_bic == TRUE & "int3" %in% vars_split_bic == TRUE, 1, 0)
     
-    # Store if 'crit1' and 'int1' both in final model, plus other variables
-    AIC_res_temp_crit1int1extra[i] <- ifelse(AIC_res_temp_crit1int1[i] == 1 & AIC_res_temp[i] == 0, 1, 0)
-    BIC_res_temp_crit1int1extra[i] <- ifelse(BIC_res_temp_crit1int1[i] == 1 & BIC_res_temp[i] == 0, 1, 0)
+    # Store if 'crit3' and 'int3' both in final model, plus other variables
+    AIC_res_temp_crit3int3extra[i] <- ifelse(AIC_res_temp_crit3int3[i] == 1 & AIC_res_temp[i] == 0, 1, 0)
+    BIC_res_temp_crit3int3extra[i] <- ifelse(BIC_res_temp_crit3int3[i] == 1 & BIC_res_temp[i] == 0, 1, 0)
     
     
     ### Next, want to summarise the 1SE and minimum MSE cross-validated lasso model, and see whether that corresponds to the correct model or not
@@ -2459,11 +2456,11 @@ lasso_sim_reduced <- function(n_sims = 1000, sampleSize = 1000, Exposure = "Bina
     ## See whether this matches the 'true' model, and code as 0 if not and 1 if so
     CV_1SE_res_temp[i] <- ifelse(setequal(cv_1SE_covars, target_covars) == TRUE, 1, 0)
     
-    # Store if 'crit1', 'int1', both, and both with additional variables in final model
-    CV_1SE_res_temp_crit1[i] <- ifelse("crit1" %in% cv_1SE_covars == TRUE, 1, 0)
-    CV_1SE_res_temp_int1[i] <- ifelse("int1" %in% cv_1SE_covars == TRUE, 1, 0)
-    CV_1SE_res_temp_crit1int1[i] <- ifelse("crit1" %in% cv_1SE_covars == TRUE & "int1" %in% cv_1SE_covars == TRUE, 1, 0)
-    CV_1SE_res_temp_crit1int1extra[i] <- ifelse(CV_1SE_res_temp_crit1int1[i] == 1 & CV_1SE_res_temp[i] == 0, 1, 0)
+    # Store if 'crit3', 'int3', both, and both with additional variables in final model
+    CV_1SE_res_temp_crit3[i] <- ifelse("crit3" %in% cv_1SE_covars == TRUE, 1, 0)
+    CV_1SE_res_temp_int3[i] <- ifelse("int3" %in% cv_1SE_covars == TRUE, 1, 0)
+    CV_1SE_res_temp_crit3int3[i] <- ifelse("crit3" %in% cv_1SE_covars == TRUE & "int3" %in% cv_1SE_covars == TRUE, 1, 0)
+    CV_1SE_res_temp_crit3int3extra[i] <- ifelse(CV_1SE_res_temp_crit3int3[i] == 1 & CV_1SE_res_temp[i] == 0, 1, 0)
     
     
     ## Next to the minimum MSE model
@@ -2484,35 +2481,35 @@ lasso_sim_reduced <- function(n_sims = 1000, sampleSize = 1000, Exposure = "Bina
     ## See whether this matches the 'true' model, and code as 0 if not and 1 if so
     CV_minMSE_res_temp[i] <- ifelse(setequal(cv_minMSE_covars, target_covars) == TRUE, 1, 0)
     
-    # Store if 'crit1', 'int1', both, and both with additional variables in final model
-    CV_minMSE_res_temp_crit1[i] <- ifelse("crit1" %in% cv_minMSE_covars == TRUE, 1, 0)
-    CV_minMSE_res_temp_int1[i] <- ifelse("int1" %in% cv_minMSE_covars == TRUE, 1, 0)
-    CV_minMSE_res_temp_crit1int1[i] <- ifelse("crit1" %in% cv_minMSE_covars == TRUE & "int1" %in% cv_minMSE_covars == TRUE, 1, 0)
-    CV_minMSE_res_temp_crit1int1extra[i] <- ifelse(CV_minMSE_res_temp_crit1int1[i] == 1 & CV_minMSE_res_temp[i] == 0, 1, 0)
+    # Store if 'crit3', 'int3', both, and both with additional variables in final model
+    CV_minMSE_res_temp_crit3[i] <- ifelse("crit3" %in% cv_minMSE_covars == TRUE, 1, 0)
+    CV_minMSE_res_temp_int3[i] <- ifelse("int3" %in% cv_minMSE_covars == TRUE, 1, 0)
+    CV_minMSE_res_temp_crit3int3[i] <- ifelse("crit3" %in% cv_minMSE_covars == TRUE & "int3" %in% cv_minMSE_covars == TRUE, 1, 0)
+    CV_minMSE_res_temp_crit3int3extra[i] <- ifelse(CV_minMSE_res_temp_crit3int3[i] == 1 & CV_minMSE_res_temp[i] == 0, 1, 0)
     
   }
   
   # Store the summaries of these results to transfer to the main results table
   res <- data.frame(AIC_propcorrect = round(sum(AIC_res_temp) / n_sims * 100, 2),
-                    AIC_crit1correct = round(sum(AIC_res_temp_crit1) / n_sims * 100, 2),
-                    AIC_int1correct = round(sum(AIC_res_temp_int1) / n_sims * 100, 2),
-                    AIC_crit1int1correct = round(sum(AIC_res_temp_crit1int1) / n_sims * 100, 2),
-                    AIC_crit1int1extra = round(sum(AIC_res_temp_crit1int1extra) / n_sims * 100, 2),
+                    AIC_crit3correct = round(sum(AIC_res_temp_crit3) / n_sims * 100, 2),
+                    AIC_int3correct = round(sum(AIC_res_temp_int3) / n_sims * 100, 2),
+                    AIC_crit3int3correct = round(sum(AIC_res_temp_crit3int3) / n_sims * 100, 2),
+                    AIC_crit3int3extra = round(sum(AIC_res_temp_crit3int3extra) / n_sims * 100, 2),
                     BIC_propcorrect = round(sum(BIC_res_temp) / n_sims * 100, 2),
-                    BIC_crit1correct = round(sum(BIC_res_temp_crit1) / n_sims * 100, 2),
-                    BIC_int1correct = round(sum(BIC_res_temp_int1) / n_sims * 100, 2),
-                    BIC_crit1int1correct = round(sum(BIC_res_temp_crit1int1) / n_sims * 100, 2),
-                    BIC_crit1int1extra = round(sum(BIC_res_temp_crit1int1extra) / n_sims * 100, 2),
+                    BIC_crit3correct = round(sum(BIC_res_temp_crit3) / n_sims * 100, 2),
+                    BIC_int3correct = round(sum(BIC_res_temp_int3) / n_sims * 100, 2),
+                    BIC_crit3int3correct = round(sum(BIC_res_temp_crit3int3) / n_sims * 100, 2),
+                    BIC_crit3int3extra = round(sum(BIC_res_temp_crit3int3extra) / n_sims * 100, 2),
                     CV_1SE_propcorrect = round(sum(CV_1SE_res_temp) / n_sims * 100, 2),
-                    CV_1SE_crit1correct = round(sum(CV_1SE_res_temp_crit1) / n_sims * 100, 2),
-                    CV_1SE_int1correct = round(sum(CV_1SE_res_temp_int1) / n_sims * 100, 2),
-                    CV_1SE_crit1int1correct = round(sum(CV_1SE_res_temp_crit1int1) / n_sims * 100, 2),
-                    CV_1SE_crit1int1extra = round(sum(CV_1SE_res_temp_crit1int1extra) / n_sims * 100, 2),
+                    CV_1SE_crit3correct = round(sum(CV_1SE_res_temp_crit3) / n_sims * 100, 2),
+                    CV_1SE_int3correct = round(sum(CV_1SE_res_temp_int3) / n_sims * 100, 2),
+                    CV_1SE_crit3int3correct = round(sum(CV_1SE_res_temp_crit3int3) / n_sims * 100, 2),
+                    CV_1SE_crit3int3extra = round(sum(CV_1SE_res_temp_crit3int3extra) / n_sims * 100, 2),
                     CV_minMSE_propcorrect = round(sum(CV_minMSE_res_temp) / n_sims * 100, 2),
-                    CV_minMSE_crit1correct = round(sum(CV_minMSE_res_temp_crit1) / n_sims * 100, 2),
-                    CV_minMSE_int1correct = round(sum(CV_minMSE_res_temp_int1) / n_sims * 100, 2),
-                    CV_minMSE_crit1int1correct = round(sum(CV_minMSE_res_temp_crit1int1) / n_sims * 100, 2),
-                    CV_minMSE_crit1int1extra = round(sum(CV_minMSE_res_temp_crit1int1extra) / n_sims * 100, 2))
+                    CV_minMSE_crit3correct = round(sum(CV_minMSE_res_temp_crit3) / n_sims * 100, 2),
+                    CV_minMSE_int3correct = round(sum(CV_minMSE_res_temp_int3) / n_sims * 100, 2),
+                    CV_minMSE_crit3int3correct = round(sum(CV_minMSE_res_temp_crit3int3) / n_sims * 100, 2),
+                    CV_minMSE_crit3int3extra = round(sum(CV_minMSE_res_temp_crit3int3extra) / n_sims * 100, 2))
   return(res)
   
 }
@@ -2522,7 +2519,7 @@ lasso_sim_reduced <- function(n_sims = 1000, sampleSize = 1000, Exposure = "Bina
 n_sims <- 10
 set.seed(6789)
 
-target_covars <- c("high_sep", "crit1", "int1")
+target_covars <- c("high_sep", "crit3", "int3")
 
 results_reduced <- data.frame(sampleSize = rep(c(1000, 10000), 16),
                       Exposure = rep(c(rep("Binary", 8), rep("Cont", 8)), 2),
@@ -2530,25 +2527,25 @@ results_reduced <- data.frame(sampleSize = rep(c(1000, 10000), 16),
                       Collinear = rep(c(rep("Low", 4), rep("High", 4)), 4),
                       Outcome = c(rep("Cont", 16), rep("Binary", 16)),
                       AIC_propcorrect = rep(NA, 32),
-                      AIC_crit1correct = rep(NA, 32),
-                      AIC_int1correct = rep(NA, 32),
-                      AIC_crit1int1correct = rep(NA, 32),
-                      AIC_crit1int1extra = rep(NA, 32),
+                      AIC_crit3correct = rep(NA, 32),
+                      AIC_int3correct = rep(NA, 32),
+                      AIC_crit3int3correct = rep(NA, 32),
+                      AIC_crit3int3extra = rep(NA, 32),
                       BIC_propcorrect = rep(NA, 32),
-                      BIC_crit1correct = rep(NA, 32),
-                      BIC_int1correct = rep(NA, 32),
-                      BIC_crit1int1correct = rep(NA, 32),
-                      BIC_crit1int1extra = rep(NA, 32),
+                      BIC_crit3correct = rep(NA, 32),
+                      BIC_int3correct = rep(NA, 32),
+                      BIC_crit3int3correct = rep(NA, 32),
+                      BIC_crit3int3extra = rep(NA, 32),
                       CV_1SE_propcorrect = rep(NA, 32),
-                      CV_1SE_crit1correct = rep(NA, 32),
-                      CV_1SE_int1correct = rep(NA, 32),
-                      CV_1SE_crit1int1correct = rep(NA, 32),
-                      CV_1SE_crit1int1extra = rep(NA, 32),
+                      CV_1SE_crit3correct = rep(NA, 32),
+                      CV_1SE_int3correct = rep(NA, 32),
+                      CV_1SE_crit3int3correct = rep(NA, 32),
+                      CV_1SE_crit3int3extra = rep(NA, 32),
                       CV_minMSE_propcorrect = rep(NA, 32),
-                      CV_minMSE_crit1correct = rep(NA, 32),
-                      CV_minMSE_int1correct = rep(NA, 32),
-                      CV_minMSE_crit1int1correct = rep(NA, 32),
-                      CV_minMSE_crit1int1extra = rep(NA, 32))
+                      CV_minMSE_crit3correct = rep(NA, 32),
+                      CV_minMSE_int3correct = rep(NA, 32),
+                      CV_minMSE_crit3int3correct = rep(NA, 32),
+                      CV_minMSE_crit3int3extra = rep(NA, 32))
 
 results_reduced
 
