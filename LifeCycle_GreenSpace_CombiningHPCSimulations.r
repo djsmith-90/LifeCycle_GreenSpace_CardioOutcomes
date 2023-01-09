@@ -324,6 +324,83 @@ change_res %>%
 write_csv(intcorrect_all, "intCorrect_allModels.csv")
 
 
+### Repeat the above tables, but split by continuous and binary outcome
+
+# Continuous outcome - All in one table
+(intcorrect_all_cont <- all_res %>%
+    filter(Outcome == "Cont") %>%
+    group_by(Interaction, Model) %>%
+    summarise(mean_AIC = mean(AIC_intcorrect), median_AIC = median(AIC_intcorrect),
+              min_AIC = min(AIC_intcorrect), max_AIC = max(AIC_intcorrect),
+              mean_BIC = mean(BIC_intcorrect), median_BIC = median(BIC_intcorrect),
+              min_BIC = min(BIC_intcorrect), max_BIC_int = max(BIC_intcorrect),
+              mean_CV_1SE = mean(CV_1SE_intcorrect), median_CV_1SE = median(CV_1SE_intcorrect),
+              min_CV_1SE = min(CV_1SE_intcorrect), max_CV_1SE = max(CV_1SE_intcorrect),
+              mean_CV_minMSE = mean(CV_minMSE_intcorrect), median_CV_minMSE = median(CV_minMSE_intcorrect),
+              min_CV_minMSE = min(CV_minMSE_intcorrect), max_CV_minMSE = max(CV_minMSE_intcorrect)))
+
+# Save this table
+write_csv(intcorrect_all_cont, "intCorrect_cont_allModels.csv")
+
+
+# Binary outcome - All in one table
+(intcorrect_all_bin <- all_res %>%
+    filter(Outcome == "Binary") %>%
+    group_by(Interaction, Model) %>%
+    summarise(mean_AIC = mean(AIC_intcorrect), median_AIC = median(AIC_intcorrect),
+              min_AIC = min(AIC_intcorrect), max_AIC = max(AIC_intcorrect),
+              mean_BIC = mean(BIC_intcorrect), median_BIC = median(BIC_intcorrect),
+              min_BIC = min(BIC_intcorrect), max_BIC_int = max(BIC_intcorrect),
+              mean_CV_1SE = mean(CV_1SE_intcorrect), median_CV_1SE = median(CV_1SE_intcorrect),
+              min_CV_1SE = min(CV_1SE_intcorrect), max_CV_1SE = max(CV_1SE_intcorrect),
+              mean_CV_minMSE = mean(CV_minMSE_intcorrect), median_CV_minMSE = median(CV_minMSE_intcorrect),
+              min_CV_minMSE = min(CV_minMSE_intcorrect), max_CV_minMSE = max(CV_minMSE_intcorrect)))
+
+# Save this table
+write_csv(intcorrect_all_bin, "intCorrect_bin_allModels.csv")
+
+
+## For binary outcomes, the percentage of models including the correct interaction term is higher for the 'no interaction' scenario compared to the 'very small interaction' scenario. This is because, when converting the continuous outcome to binary the interaction effect becomes more negative compared to the true effect; for instance, if the true interaction is null for the continuous outcome, then the interaction for the binary outcome is slightly negative. Will demonstrate this below.
+
+# Example with no interaction (sample size of 1 million to remove most random variability)
+set.seed(4321)
+n <- 1000000
+high_sep <- rbinom(n, 1, 0.5) # SEP - Not caused by anything, so just do 50/50 split (1 = high SEP)
+green1_p <- plogis(log(0.6) + (log(3) * high_sep)) # First green space exposure in pregnancy
+green1 <- rbinom(n, 1, green1_p)
+green2_p <- plogis(log(0.3) + (log(3) * high_sep) + (log(3) * green1)) # Second green space exposure
+green2 <- rbinom(n, 1, green2_p)
+green3_p <- plogis(log(0.3) + (log(3) * high_sep) + (log(3) * green2)) # Third green space exposure
+green3 <- rbinom(n, 1, green3_p)
+bmi <- 25 + (-4 * high_sep) + (-2 * green3) + (0 * high_sep * green3) + rnorm(n, 0, 3) # Continuous BMI outcome
+overweight <- ifelse(bmi > 25, 1, 0) # Binary overweight outcome
+
+# Continuous outcome = No interaction
+summary(lm(bmi ~ high_sep + green1 + green2 + green3 + high_sep:green3))
+
+# Binary outcome = Negative interaction
+summary(glm(overweight ~ high_sep + green1 + green2 + green3 + high_sep:green3, family = "binomial"))
+
+
+# Example with very small interaction (sample size of 1 million to remove most random variability)
+set.seed(4321)
+n <- 1000000
+high_sep <- rbinom(n, 1, 0.5) # SEP - Not caused by anything, so just do 50/50 split (1 = high SEP)
+green1_p <- plogis(log(0.6) + (log(3) * high_sep)) # First green space exposure in pregnancy
+green1 <- rbinom(n, 1, green1_p)
+green2_p <- plogis(log(0.3) + (log(3) * high_sep) + (log(3) * green1)) # Second green space exposure
+green2 <- rbinom(n, 1, green2_p)
+green3_p <- plogis(log(0.3) + (log(3) * high_sep) + (log(3) * green2)) # Third green space exposure
+green3 <- rbinom(n, 1, green3_p)
+bmi <- 25 + (-4 * high_sep) + (-2 * green3) + (0.5 * high_sep * green3) + rnorm(n, 0, 3) # Continuous BMI outcome
+overweight <- ifelse(bmi > 25, 1, 0) # Binary overweight outcome
+
+# Continuous outcome = Positive interaction
+summary(lm(bmi ~ high_sep + green1 + green2 + green3 + high_sep:green3))
+
+# Binary outcome = Weakly positive interaction (but almost null)
+summary(glm(overweight ~ high_sep + green1 + green2 + green3 + high_sep:green3, family = "binomial"))
+
 
 ###############################
 ### Now group by different simulation parameters (in just the 'moderate' interaction scenario)
@@ -386,6 +463,41 @@ change_res %>%
 write_csv(intcorrect_moderate_sampleSize, "intCorrect_moderateInt_sampleSize.csv")
 
 
+## And repeat combined tables split by continuous vs binary outcome
+
+# Continuous outcome all in one table
+(intcorrect_cont_moderate_sampleSize <- all_res %>%
+    filter(Interaction == "moderate" & Outcome == "Cont") %>%
+    group_by(sampleSize, Model) %>%
+    summarise(mean_AIC = mean(AIC_intcorrect), median_AIC = median(AIC_intcorrect),
+              min_AIC = min(AIC_intcorrect), max_AIC = max(AIC_intcorrect),
+              mean_BIC = mean(BIC_intcorrect), median_BIC = median(BIC_intcorrect),
+              min_BIC = min(BIC_intcorrect), max_BIC_int = max(BIC_intcorrect),
+              mean_CV_1SE = mean(CV_1SE_intcorrect), median_CV_1SE = median(CV_1SE_intcorrect),
+              min_CV_1SE = min(CV_1SE_intcorrect), max_CV_1SE = max(CV_1SE_intcorrect),
+              mean_CV_minMSE = mean(CV_minMSE_intcorrect), median_CV_minMSE = median(CV_minMSE_intcorrect),
+              min_CV_minMSE = min(CV_minMSE_intcorrect), max_CV_minMSE = max(CV_minMSE_intcorrect)))
+
+# Save this table
+write_csv(intcorrect_cont_moderate_sampleSize, "intCorrect_cont_moderateInt_sampleSize.csv")
+
+# Binary outcome all in one table
+(intcorrect_bin_moderate_sampleSize <- all_res %>%
+    filter(Interaction == "moderate" & Outcome == "Binary") %>%
+    group_by(sampleSize, Model) %>%
+    summarise(mean_AIC = mean(AIC_intcorrect), median_AIC = median(AIC_intcorrect),
+              min_AIC = min(AIC_intcorrect), max_AIC = max(AIC_intcorrect),
+              mean_BIC = mean(BIC_intcorrect), median_BIC = median(BIC_intcorrect),
+              min_BIC = min(BIC_intcorrect), max_BIC_int = max(BIC_intcorrect),
+              mean_CV_1SE = mean(CV_1SE_intcorrect), median_CV_1SE = median(CV_1SE_intcorrect),
+              min_CV_1SE = min(CV_1SE_intcorrect), max_CV_1SE = max(CV_1SE_intcorrect),
+              mean_CV_minMSE = mean(CV_minMSE_intcorrect), median_CV_minMSE = median(CV_minMSE_intcorrect),
+              min_CV_minMSE = min(CV_minMSE_intcorrect), max_CV_minMSE = max(CV_minMSE_intcorrect)))
+
+# Save this table
+write_csv(intcorrect_bin_moderate_sampleSize, "intCorrect_bin_moderateInt_sampleSize.csv")
+
+
 ## By exposure
 
 # Critical period setting
@@ -442,6 +554,40 @@ change_res %>%
 
 # Save this table
 write_csv(intcorrect_moderate_exposure, "intCorrect_moderateInt_exposure.csv")
+
+## And repeat combined tables split by continuous vs binary outcome
+
+# Continuous outcome all in one table
+(intcorrect_cont_moderate_exposure <- all_res %>%
+    filter(Interaction == "moderate" & Outcome == "Cont") %>%
+    group_by(Exposure, Model) %>%
+    summarise(mean_AIC = mean(AIC_intcorrect), median_AIC = median(AIC_intcorrect),
+              min_AIC = min(AIC_intcorrect), max_AIC = max(AIC_intcorrect),
+              mean_BIC = mean(BIC_intcorrect), median_BIC = median(BIC_intcorrect),
+              min_BIC = min(BIC_intcorrect), max_BIC_int = max(BIC_intcorrect),
+              mean_CV_1SE = mean(CV_1SE_intcorrect), median_CV_1SE = median(CV_1SE_intcorrect),
+              min_CV_1SE = min(CV_1SE_intcorrect), max_CV_1SE = max(CV_1SE_intcorrect),
+              mean_CV_minMSE = mean(CV_minMSE_intcorrect), median_CV_minMSE = median(CV_minMSE_intcorrect),
+              min_CV_minMSE = min(CV_minMSE_intcorrect), max_CV_minMSE = max(CV_minMSE_intcorrect)))
+
+# Save this table
+write_csv(intcorrect_cont_moderate_exposure, "intCorrect_cont_moderateInt_exposure.csv")
+
+# Binary outcome all in one table
+(intcorrect_bin_moderate_exposure <- all_res %>%
+    filter(Interaction == "moderate" & Outcome == "Binary") %>%
+    group_by(Exposure, Model) %>%
+    summarise(mean_AIC = mean(AIC_intcorrect), median_AIC = median(AIC_intcorrect),
+              min_AIC = min(AIC_intcorrect), max_AIC = max(AIC_intcorrect),
+              mean_BIC = mean(BIC_intcorrect), median_BIC = median(BIC_intcorrect),
+              min_BIC = min(BIC_intcorrect), max_BIC_int = max(BIC_intcorrect),
+              mean_CV_1SE = mean(CV_1SE_intcorrect), median_CV_1SE = median(CV_1SE_intcorrect),
+              min_CV_1SE = min(CV_1SE_intcorrect), max_CV_1SE = max(CV_1SE_intcorrect),
+              mean_CV_minMSE = mean(CV_minMSE_intcorrect), median_CV_minMSE = median(CV_minMSE_intcorrect),
+              min_CV_minMSE = min(CV_minMSE_intcorrect), max_CV_minMSE = max(CV_minMSE_intcorrect)))
+
+# Save this table
+write_csv(intcorrect_bin_moderate_exposure, "intCorrect_bin_moderateInt_exposure.csv")
 
 
 ## By whether exposures were centered
@@ -500,6 +646,40 @@ change_res %>%
 
 # Save this table
 write_csv(intcorrect_moderate_centered, "intCorrect_moderateInt_centered.csv")
+
+## And repeat combined tables split by continuous vs binary outcome
+
+# Continuous outcome all in one table
+(intcorrect_cont_moderate_centered <- all_res %>%
+    filter(Interaction == "moderate" & Outcome == "Cont") %>%
+    group_by(Centered, Model) %>%
+    summarise(mean_AIC = mean(AIC_intcorrect), median_AIC = median(AIC_intcorrect),
+              min_AIC = min(AIC_intcorrect), max_AIC = max(AIC_intcorrect),
+              mean_BIC = mean(BIC_intcorrect), median_BIC = median(BIC_intcorrect),
+              min_BIC = min(BIC_intcorrect), max_BIC_int = max(BIC_intcorrect),
+              mean_CV_1SE = mean(CV_1SE_intcorrect), median_CV_1SE = median(CV_1SE_intcorrect),
+              min_CV_1SE = min(CV_1SE_intcorrect), max_CV_1SE = max(CV_1SE_intcorrect),
+              mean_CV_minMSE = mean(CV_minMSE_intcorrect), median_CV_minMSE = median(CV_minMSE_intcorrect),
+              min_CV_minMSE = min(CV_minMSE_intcorrect), max_CV_minMSE = max(CV_minMSE_intcorrect)))
+
+# Save this table
+write_csv(intcorrect_cont_moderate_centered, "intCorrect_cont_moderateInt_centered.csv")
+
+# Binary outcome all in one table
+(intcorrect_bin_moderate_centered <- all_res %>%
+    filter(Interaction == "moderate" & Outcome == "Binary") %>%
+    group_by(Centered, Model) %>%
+    summarise(mean_AIC = mean(AIC_intcorrect), median_AIC = median(AIC_intcorrect),
+              min_AIC = min(AIC_intcorrect), max_AIC = max(AIC_intcorrect),
+              mean_BIC = mean(BIC_intcorrect), median_BIC = median(BIC_intcorrect),
+              min_BIC = min(BIC_intcorrect), max_BIC_int = max(BIC_intcorrect),
+              mean_CV_1SE = mean(CV_1SE_intcorrect), median_CV_1SE = median(CV_1SE_intcorrect),
+              min_CV_1SE = min(CV_1SE_intcorrect), max_CV_1SE = max(CV_1SE_intcorrect),
+              mean_CV_minMSE = mean(CV_minMSE_intcorrect), median_CV_minMSE = median(CV_minMSE_intcorrect),
+              min_CV_minMSE = min(CV_minMSE_intcorrect), max_CV_minMSE = max(CV_minMSE_intcorrect)))
+
+# Save this table
+write_csv(intcorrect_bin_moderate_centered, "intCorrect_bin_moderateInt_centered.csv")
 
 
 ## By whether exposures were centered and type of exposure
@@ -616,6 +796,40 @@ change_res %>%
 
 # Save this table
 write_csv(intcorrect_moderate_collinearity, "intCorrect_moderateInt_collinearity.csv")
+
+## And repeat combined tables split by continuous vs binary outcome
+
+# Continuous outcome all in one table
+(intcorrect_cont_moderate_collinearity <- all_res %>%
+    filter(Interaction == "moderate" & Outcome == "Cont") %>%
+    group_by(Collinear, Model) %>%
+    summarise(mean_AIC = mean(AIC_intcorrect), median_AIC = median(AIC_intcorrect),
+              min_AIC = min(AIC_intcorrect), max_AIC = max(AIC_intcorrect),
+              mean_BIC = mean(BIC_intcorrect), median_BIC = median(BIC_intcorrect),
+              min_BIC = min(BIC_intcorrect), max_BIC_int = max(BIC_intcorrect),
+              mean_CV_1SE = mean(CV_1SE_intcorrect), median_CV_1SE = median(CV_1SE_intcorrect),
+              min_CV_1SE = min(CV_1SE_intcorrect), max_CV_1SE = max(CV_1SE_intcorrect),
+              mean_CV_minMSE = mean(CV_minMSE_intcorrect), median_CV_minMSE = median(CV_minMSE_intcorrect),
+              min_CV_minMSE = min(CV_minMSE_intcorrect), max_CV_minMSE = max(CV_minMSE_intcorrect)))
+
+# Save this table
+write_csv(intcorrect_cont_moderate_collinearity, "intCorrect_cont_moderateInt_collinearity.csv")
+
+# Binary outcome all in one table
+(intcorrect_bin_moderate_collinearity <- all_res %>%
+    filter(Interaction == "moderate" & Outcome == "Binary") %>%
+    group_by(Collinear, Model) %>%
+    summarise(mean_AIC = mean(AIC_intcorrect), median_AIC = median(AIC_intcorrect),
+              min_AIC = min(AIC_intcorrect), max_AIC = max(AIC_intcorrect),
+              mean_BIC = mean(BIC_intcorrect), median_BIC = median(BIC_intcorrect),
+              min_BIC = min(BIC_intcorrect), max_BIC_int = max(BIC_intcorrect),
+              mean_CV_1SE = mean(CV_1SE_intcorrect), median_CV_1SE = median(CV_1SE_intcorrect),
+              min_CV_1SE = min(CV_1SE_intcorrect), max_CV_1SE = max(CV_1SE_intcorrect),
+              mean_CV_minMSE = mean(CV_minMSE_intcorrect), median_CV_minMSE = median(CV_minMSE_intcorrect),
+              min_CV_minMSE = min(CV_minMSE_intcorrect), max_CV_minMSE = max(CV_minMSE_intcorrect)))
+
+# Save this table
+write_csv(intcorrect_bin_moderate_collinearity, "intCorrect_bin_moderateInt_collinearity.csv")
 
 
 ## By collinearity and whether centered

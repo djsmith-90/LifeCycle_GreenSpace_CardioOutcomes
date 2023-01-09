@@ -351,6 +351,11 @@ table(data$greenSpace_combo2[!is.na(data$BMI_f7)])
 
 # Sample sizes much better now (min 372 in F@7 sample), but as only 2 time-points can't explore as many life-course trajectories
 
+# How correlated are all these exposures - They are correlated, but not perfectly, so hopefully is enough variation to work with
+cor(data$greenSpace_preg, data$greenSpace_4, use = "pairwise.complete.obs")
+cor(data$greenSpace_preg, data$greenSpace_7, use = "pairwise.complete.obs")
+cor(data$greenSpace_4, data$greenSpace_7, use = "pairwise.complete.obs")
+
 
 
 ## Distance to green space in pregnancy, age 4 and age 7 - First tidy variables, then explore variation over time
@@ -518,6 +523,11 @@ prop.table(table(data$garden_combo2)) * 100
 table(data$garden_combo2[!is.na(data$BMI_f7)])
 
 # Sample sizes slightly better now, but really not by much (min 8 in F@7 sample), and as only 2 time-points can't explore as many life-course trajectories
+
+# How correlated are all these exposures - They are correlated, but not perfectly, so hopefully is enough variation to work with
+cor(data$garden_preg, data$garden_4, use = "pairwise.complete.obs")
+cor(data$garden_preg, data$garden_7, use = "pairwise.complete.obs")
+cor(data$garden_4, data$garden_7, use = "pairwise.complete.obs")
 
 
 
