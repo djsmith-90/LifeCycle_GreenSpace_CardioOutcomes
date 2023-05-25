@@ -6,7 +6,7 @@
 
 ### Previous work has detailed a structured approach to life course modelling for both binary exposures (Smith et al., 2015: https://journals.lww.com/epidem/Fulltext/2015/09000/Model_Selection_of_the_Effect_of_Binary_Exposures.15.aspx) and continuous exposures with confounding (Smith et al., 2016: https://academic.oup.com/ije/article/45/4/1271/2951966?login=true) using LARS/lasso methods. Building on these approaches, we aim to demonstrate here how interactions can be incorporated into these models. 
 
-## However, we will not be using the LARS/covariance test method here, as: 1) there are issues with the covariance test and it is no longer recommended; and 2) Using the LARS method, it is possible to 'force' continuous confounders to be included in the model, however, this is more difficult for binary/categorical binary outcomes. So here we will focus on using ordinary lasso models via glmnet, rather than the LARS method. Rather than being a stepwise procedure like LARS, this approach gradually increases the lambda value and lets more variables into the model; this can make it difficult to assess when adding a new covariate does or does not improve model fit. Interpretation is therefore more subjective, based on inspection of the improvement in the deviance ratio (a measure of goodness-of-fit similar to R2).
+## However, we will not be using the LARS/covariance test method here, as: 1) there are issues with the covariance test and it is no longer recommended; and 2) Using the LARS method, it is possible to 'force' continuous confounders to be included in the model, however, this is more difficult for binary/categorical outcomes. So here we will focus on using ordinary lasso models via glmnet, rather than the LARS method. Rather than being a stepwise procedure like LARS, this approach gradually increases the lambda value and lets more variables into the model; this can make it difficult to assess when adding a new covariate does or does not improve model fit. Interpretation is therefore more subjective, based on inspection of the improvement in the deviance ratio (a measure of goodness-of-fit similar to R2).
 
 ## To interpret these results, we will focus on three approaches:
 ##  - 1) Using a 'subjective' approach looking at the order in which hypotheses were entered into the model, combined with a plot of deviance/variance explained when each predictor was added, and making judgement based on these sources of information
@@ -472,7 +472,7 @@ confint(lm(bmi ~ high_sep + crit3 + high_sep:crit3))
 
 ### One benefit of this approach over LARS and the FWL method (in addition to being easier to implement and the regression parameters being on the original scale), is that it is possible to edit the penalty factor when running selective inference, so if a variable does not appear in the final lasso model we can constrain it to be in the reported model - particularly handy if lasso selects an interaction term but not a main effect, but we want to report a main effect in the reported model. This functionality is not possible with LARs and the FWL method, as the confounders/covariates are fixed throughout the process.
 
-## Here's an example - Say our best-fitting model from the lasso algorithm was the fourth model, with high_sep, crit3, int3 and green_dec23_int. In this example, we may want to force the 'green_dec23' main effect into the final model.
+## Here's an example - Say our best-fitting model from the lasso algorithm was the fourth model, with high_sep, crit3, int3 and green_dec23_int (as potentially suggested by the visual inspection plot). In this example, we may want to force the 'green_dec23' main effect into the final model.
 df
 
 # select the chosen lambda value (Note: Sometimes the behaviour of this selective inference package is quite strange, as have to specify the lambda value manually to get the script to work - More on this below.)
@@ -480,11 +480,32 @@ lambda <- as.numeric(df$Lambda[df$VarNum == 4])
 lambda
 lambda <- 0.08160667
 
-# Extract the coefficients (have to exclude the intercept) - Here we edit the penalty term here so that 'green_dec23' (the 16th variable in x_hypos) is forced into the model (also have to force 'green_dec23_int' into the model here as well).
+# Extract the coefficients (have to exclude the intercept) - Here we edit the penalty term here so that 'green_dec23' (the 16th variable in x_hypos) is forced into the model (also have to force 'green_dec23_int' - variable 17 - into the model here as well).
 beta <- coef(mod, s = lambda, x = x_hypos, y = bmi, 
              penalty.factor = (c(0, rep(1, 14), 0, 0)), exact = TRUE)[-1]
 
-# Perform selective inference. Note: There are severe issues with model fit here, any there are lots of warning messages from the 'fixedLassoInf' command, and the confidence intervals contain infinite values. Some obvious issues with estimation here, likely because the 'green_dec23' variables have no association with the outcome.
+# Perform selective inference. Note: There are severe issues with model fit here, any there are lots of warning messages from the 'fixedLassoInf' command, the confidence intervals contain infinite values and the p-values are non-sensical (either 0 or 1).
+si_res <- fixedLassoInf(x_hypos, bmi, beta, lambda, alpha = 0.05)
+si_res
+
+## The output suggested lowering the glmnet tolerance factor to help improve convergence, so will do that here (Which seems to work and produces more sensible outputs)
+
+# glmnet with different threshold
+mod2 <- glmnet(x_hypos, bmi, alpha = 1, thresh = 1E-5, 
+               penalty.factor = (c(0, rep(1, ncol(x_hypos) - 1))))
+
+# Check get same parameters as in previous model (we do)
+coef(mod2, s = max(mod2$lambda[mod2$df == 4])); min(mod2$dev.ratio[mod2$df == 4])
+
+# Store lambda value
+mod2
+lambda <- 0.09830
+
+# Extract betas (have to specify all the parameters to keep here)
+beta <- coef(mod2, s = lambda, x = x_hypos, y = bmi, 
+              penalty.factor = (c(0, rep(1, 4), 0, 0, rep(1, 8), 0, 0)), exact = TRUE)[-1]
+
+# Perform selective inference (now get more sensible results, although one side of the confidence intervals is much further away from the coefficient than the other side, which is quite odd)
 si_res <- fixedLassoInf(x_hypos, bmi, beta, lambda, alpha = 0.05)
 si_res
 si_res$vars
@@ -496,7 +517,7 @@ colnames(si_res) <- c("Variable", "Beta", "SE", "Pvalue", "CI.lo", "CI.up")
 si_res[,-1] <- lapply(si_res[,-1], function(x) round(as.numeric(as.character(x)), 4))
 si_res
 
-## And compare against standard regression results (although impossible to really compare as no CIs or p-values for selective inference results. Still, does appear that none of the extra variables, other than high_sep, crit3 and int3 are associated with the outcome)
+## And compare against standard regression results - Results similar, but wider (and aymmetrical) confidence intervals for lasso model, so, does appear that none of the extra variables, other than high_sep, crit3 and int3 are associated with the outcome
 summary(lm(bmi ~ high_sep + crit3 + high_sep:crit3 + green_dec23 + green_dec23_int))
 confint(lm(bmi ~ high_sep + crit3 + high_sep:crit3 + green_dec23 + green_dec23_int))
 
@@ -548,7 +569,7 @@ beta <- coef(mod.cv, s = lambda, x = x_hypos, y = bmi,
              penalty.factor = (c(0, rep(1, ncol(x_hypos) - 1))), exact = TRUE)[-1]
 
 
-# Perform selective inference - There are some warnings here, and the p-values and confidence intervals have not been estimated (possibly because the model is too complex with 12 parameters). Error is: "In TG.limits(y, A, b, vj, Sigma = diag(rep(sigma^2, n))): Constraint not satisfied. A %*% Z should be elementwise less than or equal to b"
+# Perform selective inference - There are some warnings here, and the p-values and confidence intervals have not been estimated (possibly because the model is too complex with 12 parameters). Unlike standard glmnet, can't add a 'thresh' parameter to try and get around these convergence issues.
 si_res_CV_minMSE <- fixedLassoInf(x_hypos, bmi, beta, lambda, alpha = 0.05)
 si_res_CV_minMSE
 si_res_CV_minMSE$vars
@@ -601,7 +622,7 @@ si_res_CV_1SE
 covars <- x_hypos[, "high_sep"]
 covars <- as.factor(covars)
 
-# Drop SEP confoudner from matrix of encoded hypotheses
+# Drop SEP confounder from matrix of encoded hypotheses
 x_hypos_lars <- x_hypos[, !colnames(x_hypos) == "high_sep"]
 
 # Get the residuals from the exposures/encoded hypotheses, adjusting for covariates
